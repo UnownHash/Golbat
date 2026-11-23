@@ -126,12 +126,20 @@ type deriveEventsSummary struct {
 	// BucketS is the field every row carries (see deriveEventsDeviation).
 	BucketSeconds int64 `json:"bucket_seconds"`
 	BucketS       int64 `json:"bucket_s"`
-	PokemonID     int32 `json:"pokemon_id"`
-	Form          int32 `json:"form"`
-	Strong        bool  `json:"strong"`
-	Boosted       bool  `json:"boosted"`
-	UTCOffset     int32 `json:"utc_offset"`
-	Checked       int   `json:"checked"`
+	// FlushedAt is the unix time a summary was written early, when the
+	// writer shut down with the bucket still open; zero (omitted) for a
+	// bucket that ran its course. Replay orders such a summary at FlushedAt
+	// rather than at the bucket's end, so buckets written after a restart
+	// that shortened bucket_minutes do not replay before it. Bucket is the
+	// bucket's start as the writer computed it (aligned to Go's zero time,
+	// not the Unix epoch, so replay must not infer it).
+	FlushedAt int64 `json:"flushed_at,omitempty"`
+	PokemonID int32 `json:"pokemon_id"`
+	Form      int32 `json:"form"`
+	Strong    bool  `json:"strong"`
+	Boosted   bool  `json:"boosted"`
+	UTCOffset int32 `json:"utc_offset"`
+	Checked   int   `json:"checked"`
 	// Seen counts first sightings (new pokemon records) in the bucket,
 	// encountered or not.
 	Seen int `json:"seen"`
@@ -163,7 +171,13 @@ type deriveEventsDeviation struct {
 	// BucketS is the bucket length in seconds the row was written under
 	// (summaries carry it too), so replay orders each row by its own bucket
 	// when bucket_minutes changes between restarts. Absent in older files.
-	BucketS       int64         `json:"bucket_s"`
+	BucketS int64 `json:"bucket_s"`
+	// BucketStart is the start (unix seconds) of the bucket the check was
+	// counted in, exactly as the writer computed it. Replay groups rows by
+	// it instead of inferring an epoch-aligned start from Ts, which differs
+	// whenever the bucket length does not divide the Unix epoch evenly
+	// (Go truncates from its zero time). Absent in older files.
+	BucketStart   int64         `json:"bucket_start"`
 	UTCOffset     int32         `json:"utc_offset"`
 	EncounterID   uint64        `json:"encounter_id,string"` // exceeds 2^53; see derivationLogPayload
 	PokemonID     int32         `json:"pokemon_id"`
@@ -328,7 +342,7 @@ func (w *deriveEventsWriter) handle(ev deriveEventCheck) {
 	}
 	b := at.UTC().Truncate(w.bucket)
 	if !w.bucketStart.IsZero() && b.After(w.bucketStart) {
-		w.flushBucket()
+		w.flushBucket(false)
 	}
 	if w.bucketStart.IsZero() {
 		w.bucketStart = b
@@ -378,7 +392,7 @@ func (w *deriveEventsWriter) handle(ev deriveEventCheck) {
 func (w *deriveEventsWriter) deviationRow(ev deriveEventCheck, ts int64, cell string, offset int32) *deriveEventsDeviation {
 	c := ev.Check
 	d := &deriveEventsDeviation{
-		Kind: "deviation", Ts: ts, EventTs: ev.Time.Unix(), BucketS: int64(w.bucket / time.Second), UTCOffset: offset, EncounterID: ev.EncounterID,
+		Kind: "deviation", Ts: ts, EventTs: ev.Time.Unix(), BucketS: int64(w.bucket / time.Second), BucketStart: w.bucketStart.Unix(), UTCOffset: offset, EncounterID: ev.EncounterID,
 		PokemonID: ev.PokemonID, Form: ev.Form, Costume: ev.Costume,
 		Strong: ev.Strong, Boosted: ev.Boosted, Weather: ev.Weather, Cell: cell,
 		SpawnID: w.spawnHash(ev.SpawnID), FirstSeen: ev.FirstSeen, Account: w.accountHash(ev.Account),
@@ -442,13 +456,14 @@ func (w *deriveEventsWriter) location(name string) *time.Location {
 // period still produces its summary.
 func (w *deriveEventsWriter) tick() {
 	if !w.bucketStart.IsZero() && !w.now().Before(w.bucketStart.Add(w.bucket)) {
-		w.flushBucket()
+		w.flushBucket(false)
 	}
 }
 
 // flushBucket writes the open bucket's summaries (sorted by key, for stable
-// output) and flushes the file buffer.
-func (w *deriveEventsWriter) flushBucket() {
+// output) and flushes the file buffer. early marks a shutdown flush of a
+// bucket still open: its summaries carry flushed_at.
+func (w *deriveEventsWriter) flushBucket(early bool) {
 	keys := make([]deriveEventsSummaryKey, 0, len(w.summaries))
 	for k := range w.summaries {
 		keys = append(keys, k)
@@ -458,10 +473,17 @@ func (w *deriveEventsWriter) flushBucket() {
 			boolCompare(a.Strong, b.Strong), boolCompare(a.Boosted, b.Boosted),
 			cmp.Compare(a.UTCOffset, b.UTCOffset))
 	})
+	// A bucket whose end has passed is complete, however it came to be
+	// flushed, so only one cut short is marked.
+	now := w.now()
+	early = early && now.Before(w.bucketStart.Add(w.bucket))
 	for _, k := range keys {
 		s := w.summaries[k]
 		s.Bucket, s.BucketSeconds = w.bucketStart.Unix(), int64(w.bucket/time.Second)
 		s.BucketS = s.BucketSeconds
+		if early {
+			s.FlushedAt = now.Unix()
+		}
 		w.writeLine(s)
 	}
 	clear(w.summaries)
@@ -511,7 +533,7 @@ func boolCompare(a, b bool) int {
 
 // close flushes the open bucket and closes the file. Safe to call again.
 func (w *deriveEventsWriter) close() error {
-	w.flushBucket()
+	w.flushBucket(true)
 	return w.closeFile()
 }
 

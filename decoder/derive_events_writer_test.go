@@ -720,8 +720,8 @@ func TestDeriveEventsWriterRecoversFromWriteError(t *testing.T) {
 	if w.file == nil {
 		t.Fatal("file not opened")
 	}
-	_ = w.file.Close() // every later write to it fails
-	w.flushBucket()    // deviation + summary buffered; the flush fails
+	_ = w.file.Close()   // every later write to it fails
+	w.flushBucket(false) // deviation + summary buffered; the flush fails
 	if w.file != nil || w.buf != nil {
 		t.Fatal("writer kept the failed file")
 	}
@@ -775,6 +775,42 @@ func TestDeriveEventsWriterRemovesOrphanGzipTemp(t *testing.T) {
 	}
 	if rows := readEventLines(t, withPlain+".gz"); len(rows) != 1 {
 		t.Errorf("recompressed rows = %v", rows)
+	}
+}
+
+// Every deviation carries the bucket start the writer computed, a summary
+// written by a normal flush has none of flushed_at, and the one written at
+// shutdown carries the shutdown time.
+func TestDeriveEventsWriterBucketMetadata(t *testing.T) {
+	dir := t.TempDir()
+	clock := &testClock{time.Date(2026, 11, 15, 10, 8, 0, 0, time.UTC)}
+	w := newTestDeriveEventsWriter(t, dir, clock)
+
+	dev := agreeingEventCheck(clock.t)
+	dev.Agree.Level = dimDisagree
+	w.handle(dev)
+	clock.t = clock.t.Add(10 * time.Minute) // 10:18, next bucket: flushes the first
+	dev2 := agreeingEventCheck(clock.t)
+	dev2.Agree.Level = dimDisagree
+	w.handle(dev2)
+	clock.t = clock.t.Add(time.Minute) // shutdown at 10:19
+	if err := w.close(); err != nil {
+		t.Fatal(err)
+	}
+	rows := readEventLines(t, eventsFile(dir, clock.t))
+	devs, sums := rowsOfKind(rows, "deviation"), rowsOfKind(rows, "summary")
+	if len(devs) != 2 || len(sums) != 2 {
+		t.Fatalf("got %d deviations, %d summaries", len(devs), len(sums))
+	}
+	at := func(h, m int) float64 { return float64(time.Date(2026, 11, 15, h, m, 0, 0, time.UTC).Unix()) }
+	if devs[0]["bucket_start"] != at(10, 0) || devs[1]["bucket_start"] != at(10, 15) {
+		t.Errorf("deviation bucket_start = %v, %v", devs[0]["bucket_start"], devs[1]["bucket_start"])
+	}
+	if _, ok := sums[0]["flushed_at"]; ok {
+		t.Errorf("a normal flush wrote flushed_at: %v", sums[0]["flushed_at"])
+	}
+	if sums[1]["flushed_at"] != at(10, 19) {
+		t.Errorf("shutdown summary flushed_at = %v, want %v", sums[1]["flushed_at"], at(10, 19))
 	}
 }
 

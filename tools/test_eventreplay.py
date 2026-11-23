@@ -825,6 +825,47 @@ class ReaderTest(unittest.TestCase):
             seen.append(r)
         self.assertEqual([r["ts"] for r in seen], [T0 + 10, T0 + 500])
 
+    def test_bucket_start_beats_epoch_inference(self):
+        # Codex: 7-minute buckets are aligned to Go's zero time, not the
+        # Unix epoch. Rows at 11:55:02 then 11:54:58 are one writer bucket;
+        # epoch alignment would put them in different buckets and move the
+        # second to the later bucket's start.
+        edge = (T0 // 420 + 1) * 420  # an epoch multiple of 420 s
+        start = edge - 240  # the writer's bucket spans [edge-240, edge+180)
+        hi, lo = edge + 2, edge - 2
+        recs = [dev(hi), dev(lo)]
+        for r in recs:
+            r["bucket_s"], r["bucket_start"] = 420, start
+        got = list(read_records([self.write("b7.jsonl", recs)]))
+        self.assertEqual([r["ts"] for r in got], [lo, hi])
+        self.assertTrue(all("event_ts" not in r for r in got))
+        # --at between them sees the second row at its own time.
+        seen = [r for r in got if eventreplay.order_key(r)[0] <= lo + 1]
+        self.assertEqual([r["ts"] for r in seen], [lo])
+
+    def test_shutdown_summary_sorts_at_flushed_at(self):
+        # Fable: a 60-minute bucket shut down 10 minutes in writes its
+        # summary at once; later 5-minute buckets must replay after it, not
+        # after the long bucket's end.
+        def tag(r, n, start):
+            r["bucket_s"], r["bucket_start"] = n, start
+            return r
+        long_sum = summ(T0, n=2, ok=2)
+        long_sum["bucket_seconds"] = long_sum["bucket_s"] = 3600
+        long_sum["flushed_at"] = T0 + 600
+        d1 = tag(dev(T0 + 1210, level="disagree"), 300, T0 + 1200)
+        s1 = summ(T0 + 1200, n=1, ok=0)
+        s1["bucket_seconds"] = s1["bucket_s"] = 300
+        d2 = tag(dev(T0 + 1810, level="disagree"), 300, T0 + 1800)
+        recs = [tag(dev(T0 + 100, level="disagree"), 3600, T0), long_sum,
+                d1, s1, d2]
+        got = list(read_records([self.write("shrink.jsonl", recs)]))
+        keys = [eventreplay.order_key(r) for r in got]
+        self.assertEqual(keys, sorted(keys))
+        self.assertEqual(eventreplay.order_key(long_sum), (T0 + 600, 0))
+        self.assertEqual(got.index(long_sum), 1)  # before both later buckets
+        self.assertEqual(got[2:], [d1, s1, d2])
+
     def test_reads_truncated_gzip_and_partial_line(self):
         recs = [dev(T0 + i * 10) for i in range(200)]
         full = self.path("full.gz")
@@ -865,8 +906,10 @@ class GoldenTest(unittest.TestCase):
 
     def test_golden_reads_and_feeds_detector(self):
         recs = list(read_records([GOLDEN]))
-        self.assertEqual([r["kind"] for r in recs], ["deviation", "summary"])
-        d, s = recs
+        # The shutdown summary's flushed_at equals the deviation's ts (the
+        # test clock is fixed) and a summary sorts first at a tie.
+        self.assertEqual([r["kind"] for r in recs], ["summary", "deviation"])
+        s, d = recs
         # The deviation fields the detector reads.
         self.assertIsInstance(d["ts"], int)
         self.assertEqual(d["event_ts"], d["ts"])  # not delayed: unclamped
@@ -884,9 +927,10 @@ class GoldenTest(unittest.TestCase):
         # The summary fields it reads.
         self.assertEqual(s["bucket_seconds"], 900)
         self.assertEqual((d["bucket_s"], s["bucket_s"]), (900, 900))
+        self.assertEqual(d["bucket_start"], s["bucket"])
+        self.assertEqual(s["flushed_at"], 1784109780)  # the shutdown flush
         self.assertEqual(s["seen"], 1)
-        self.assertEqual(eventreplay.order_key(s)[0],
-                         s["bucket"] + s["bucket_seconds"])
+        self.assertEqual(eventreplay.order_key(s)[0], s["flushed_at"])
         for dim, ok in (("ivs", 2), ("level", 1), ("size", 2), ("quick", 2),
                         ("charged", 1)):
             self.assertEqual(s[dim], {"ok": ok, "n": 2}, dim)

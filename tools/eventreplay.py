@@ -25,14 +25,22 @@ Two record kinds are read; anything else is skipped:
   under; the reader groups and orders each row by its own bucket, so a
   `bucket_minutes` change between restarts replays in order. Files without
   `bucket_s` (older writers) infer the length from the summaries seen, 15
-  minutes until the first.
+  minutes until the first. Every row also carries `bucket_start` (unix
+  seconds), the start of its bucket exactly as the writer computed it (Go
+  truncates from its zero time, so it is not epoch-aligned for lengths that
+  do not divide the epoch, such as 7 minutes); the reader groups by it and
+  falls back to epoch alignment of `ts` only when it is absent.
 - `summary`: per bucket (15 min by default) and (pokemon_id, form, strong,
   boosted, utc_offset), how many checks agreed on each dimension, plus the
   raw size-roll range per observed size class. Every check counts, the
   deviations' too, except that size_rolls come only from checks whose IVs
   agreed (when the walk did not match, its roll is noise). Ordered by bucket end (`bucket` + `bucket_seconds`): a
   summary means "this bucket is complete", and one for a bucket straddling
-  UTC midnight can sit in the next day's file.
+  UTC midnight can sit in the next day's file. `bucket` is the writer's
+  bucket start. A summary written at shutdown with its bucket still open
+  carries `flushed_at` (unix seconds) and is ordered there instead, so
+  buckets written after a restart that shortened `bucket_minutes` replay
+  after it, not after the long bucket's end.
 
 Files are merged by that order key (each file is near-ordered on its own;
 small disorder passes through rather than failing). A gzip stream cut short
@@ -170,9 +178,10 @@ ACTIVE = ("candidate", "confirmed")
 def order_key(rec: dict) -> tuple:
     """When a record happened, for merging: a deviation at `ts`, a summary
     at its bucket's end. A summary sorts before a deviation at the same
-    second, which belongs to the next bucket."""
+    second, which belongs to the next bucket. A summary cut short by a
+    shutdown (`flushed_at`) sorts at that time."""
     if rec.get("kind") == "summary":
-        return (rec["bucket"] + rec["bucket_seconds"], 0)
+        return (rec.get("flushed_at") or rec["bucket"] + rec["bucket_seconds"], 0)
     return (rec["ts"], 1)
 
 
@@ -206,7 +215,11 @@ def _bucket_ordered(records: Iterator[dict]) -> Iterator[dict]:
             bs = n or rec["bucket_seconds"] or bs
             b = rec["bucket"]
         else:
-            b = rec["ts"] // bs * bs
+            # The writer's own bucket start when recorded; older files
+            # infer an epoch-aligned one.
+            b = rec.get("bucket_start")
+            if b is None:
+                b = rec["ts"] // bs * bs
         e = b + bs
         if cur is not None and e <= cur and rec["kind"] != "summary":
             # A delayed row entirely before the held bucket: move it to the
