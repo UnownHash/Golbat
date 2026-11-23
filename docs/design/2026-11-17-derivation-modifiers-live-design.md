@@ -1,6 +1,6 @@
 # Derivation Modifiers — Live Learner Design
 
-> **Status:** Agreed 2026-11-17, revised 2026-11-23 (§7); building on branch
+> **Status:** Agreed 2026-11-17, revised 2026-11-23 (§7, §8); building on branch
 > t3/encounter-override-heuristics (PR #441).
 
 - **Date:** 2026-11-17
@@ -193,7 +193,61 @@ refused in-cell roll is a contra.
 clock; replay orders records within a bucket by time before merging (a
 restart inside a bucket appends earlier deviations after its summary).
 
-## 8. Not included
+## 8. Second revision: judge each event at its own scale (2026-11-23)
+
+A second pair of reviews (Fable, Codex) showed the §7 per-cell rules still
+fail at scale. Only cells that had deviated counted, so scattered noise over
+thousands of cells confirmed (`unexplained` held 41 of 48 simulated hours at
+1% noise). Under sampled encounters a modifier stayed applied in its old
+cells for 55 h after its event. One shared end counter let a match in cell B
+keep a disproven cell A covered, and agreements before a track existed were
+lost. Level-14 cells are the right unit for a venue's border but too fine to
+count evidence when encounters are sampled. Events are either zone-wide (a
+global event in local hours) or ticketed venues (level-14 cells); nothing in
+between. This section replaces §7's "Outcomes per modifier" and "Regions"
+and §2–§3's in-cell/outside rules; §7's evidence, applying, publishing,
+size-evidence and events-log rules stand except where stated.
+
+**Zone record.** Per (scope, zone, dimension) the learner keeps a ring of the
+last 16 located checks (cell ≠ 0): agree, or the effect seen (delta, move,
+size match), with its cell. It exists from the first check, before any
+modifier, and is pruned when idle for `window`. Only informative checks
+enter it: for size, rolls in a disputed band of an active candidate's
+boundaries.
+
+**A modifier has two coverages**, judged independently:
+- *Zone-wide* (global events): on when its effect is more than half of the
+  zone record, the record holds at least `confirm` entries, its matches lie
+  under at least two level-10 cells, and the zone is known; off as soon as
+  that fails. Under sampling the next hour's first encounters turn it off.
+  Cells whose latest entry in the record is an agreement are excluded (at
+  most 16).
+- *Venue cells*: a cell is covered after two matches with no agreement or
+  other effect in that cell since; one agreement or other effect there
+  removes it at once (the effect applies to every pokemon in scope, so one
+  base result disproves the cell). Scattered noise rarely hits one cell
+  twice and never covers.
+
+**Lifecycle.** Candidate: `start` matches within `window` (as §3). Confirmed:
+`confirm` located matches and either coverage on. Ended: neither coverage
+on after confirming (reason `agreement`, or `contradicted` when another
+effect displaced it), or unseen. Two confirmed modifiers covering one record
+with different values are withheld (§7).
+
+**All-strong** is not tracked: two or more species-scope level offsets with
+the same delta active in one zone are reported as an all-strong summary in
+the API (detection only, never applied).
+
+**Size** is zone-wide only: its boundaries come from every IV-agreeing
+located roll in the zone; a confirmed size modifier needs `start` rolls
+before listing a new boundary. Strong size evidence counts only XL and XXL
+(the strong walk can produce nothing else).
+
+**Also:** the learner drops a repeated encounter id (kept for `unseen`),
+independent of record state; `start`, `confirm` and `end` must be ≤ 16;
+`zone_wide_cells` is removed.
+
+## 9. Not included
 
 Loading a shared modifier file; retroactive correction; detection in the
 offline script by cell (the events log carries no per-cell agreements; the
