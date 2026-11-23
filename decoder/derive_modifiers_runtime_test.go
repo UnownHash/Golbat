@@ -502,3 +502,64 @@ func TestAddEncounterPokemonFeedsLearnerOncePerSpawn(t *testing.T) {
 		t.Errorf("reloaded encountered record: learner %d, events log %d; want 1 and 4", len(r.events), len(w.events))
 	}
 }
+
+// firstEncounterTestRig installs a queued learner and events writer (no
+// readers) for one test.
+func firstEncounterTestRig(t *testing.T) (*modifierRuntime, *deriveEventsWriter) {
+	t.Helper()
+	r := newModifierRuntime(defaultModifierParams(), 8)
+	withModifierRuntime(t, r)
+	w := newTestDeriveEventsWriter(t, t.TempDir(), &testClock{time.Now()})
+	w.events = make(chan deriveEventCheck, 8)
+	prevWriter := derivationEventsWriter
+	derivationEventsWriter = w
+	t.Cleanup(func() { derivationEventsWriter = prevWriter })
+	return r, w
+}
+
+func encounterBulbasaur(p *Pokemon) {
+	p.addEncounterPokemon(context.Background(), db.DbDetails{}, &pogo.PokemonProto{
+		PokemonId: 1, IndividualAttack: 10, IndividualDefense: 10, IndividualStamina: 10,
+		CpMultiplier: 0.5, PokemonDisplay: &pogo.PokemonDisplayProto{},
+	}, "")
+}
+
+// The usual life of a spawn: sighted wild, then encountered. The encounter is
+// its first and reaches the learner once.
+func TestAddEncounterPokemonFeedsLearnerAfterWildSighting(t *testing.T) {
+	r, w := firstEncounterTestRig(t)
+	p := &Pokemon{PokemonData: PokemonData{Id: Uint64Str(777888999114)}}
+	p.SetPokemonId(1)
+	p.SetSeenType(SeenTypeCodeWild)
+	p.SetWeather(null.IntFrom(int64(pogo.GameplayWeatherProto_NONE)))
+	p.snapshotOldValues()
+	p.SetSeenType(SeenTypeCodeEncounter) // as updatePokemonFromEncounterProto does
+	encounterBulbasaur(p)
+	if len(r.events) != 1 || len(w.events) != 1 {
+		t.Errorf("learner %d, events log %d; want 1 and 1", len(r.events), len(w.events))
+	}
+}
+
+// With pokemon_internal_to_db a roll-marked sighting writes GolbatInternal
+// with the mark and no scans. Those bytes are not an encounter: the record's
+// first encounter still reaches the learner (here the disguise has since
+// changed, clearing the mark, so the encounter is checked).
+func TestAddEncounterPokemonFeedsLearnerWithRollMarkOnlyInternal(t *testing.T) {
+	r, w := firstEncounterTestRig(t)
+	p := &Pokemon{PokemonData: PokemonData{Id: Uint64Str(777888999115)}}
+	p.SetIsDitto(true)
+	p.dittoRollMarked = true
+	p.rewriteGolbatInternal()
+	if len(p.GolbatInternal) == 0 || len(p.scanHistory) != 0 {
+		t.Fatalf("setup: GolbatInternal %d bytes, history %d; want a mark-only blob", len(p.GolbatInternal), len(p.scanHistory))
+	}
+	p.SetIsDitto(false) // the display changed; the stored bytes outlive the flag
+	p.SetPokemonId(1)
+	p.SetSeenType(SeenTypeCodeWild)
+	p.SetWeather(null.IntFrom(int64(pogo.GameplayWeatherProto_NONE)))
+	p.snapshotOldValues()
+	encounterBulbasaur(p)
+	if len(r.events) != 1 || len(w.events) != 1 {
+		t.Errorf("learner %d, events log %d; want 1 and 1", len(r.events), len(w.events))
+	}
+}

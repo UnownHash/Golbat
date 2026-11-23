@@ -180,6 +180,7 @@ func submitDerivationModifierSighting(p *Pokemon, now int64) {
 		p.IsStrong.ValueOrZero()) {
 		return
 	}
+	// now (the sighting's map time) is replaced by the server clock at submit.
 	submitDerivationModifierEvent(newModifierEvent(newDeriveEventSighting(p, time.Unix(now, 0))))
 }
 

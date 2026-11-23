@@ -2043,15 +2043,20 @@ func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails
 		pokemon.setUsernameIfStored(username)
 		return
 	}
+	// Hydrate the scan history and roll mark from GolbatInternal before
+	// anything reads them: firstEncounter just below, and wasRollMarked
+	// (see there for why it must be hydrated).
+	pokemon.populateInternal()
 	// Each spawn is one piece of evidence for the modifier learner, however
 	// often it is encountered (design 2026-11-17 §7 "Evidence"): only an
 	// encounter of a record that held no encounter-reported scan feeds it.
 	// Decided from the record's own state before this encounter changes
-	// it: no scan history (in memory or serialised) and not loaded with an
-	// encounter seen type (a reload without pokemon_internal_to_db keeps
-	// the seen type but not the history). The events log gets every check.
+	// it: no (hydrated) scan history, and not loaded with an encounter seen
+	// type (a reload without pokemon_internal_to_db keeps the seen type but
+	// not the history). A roll-marked record's GolbatInternal carries the
+	// mark but no scans, so it still counts. The events log gets every check.
 	firstEncounter := derivationModifierLearnerOn && len(pokemon.scanHistory) == 0 &&
-		len(pokemon.GolbatInternal) == 0 && !encounteredSeenType(pokemon.oldValues.SeenType.Code)
+		!encounteredSeenType(pokemon.oldValues.SeenType.Code)
 	pokemon.SetShiny(null.BoolFrom(proto.PokemonDisplay.Shiny))
 	pokemon.SetCp(null.IntFrom(int64(proto.Cp)))
 	pokemon.SetMove1(null.IntFrom(int64(proto.Move1)))
@@ -2135,15 +2140,15 @@ func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails
 	// clear dittoRollMarked; a read afterwards would be wrong for exactly the
 	// sightings this audits. See checkDerivation's wasRollMarked parameter.
 	//
-	// Hydrate first. dittoRollMarked lives in GolbatInternal, so on a record
-	// loaded from the database or a preserved cache it reads false until
-	// populateInternal has run, and nothing else here guarantees that:
-	// setPokemonDisplay skips hydration when the boost state is unchanged,
-	// and maybeMarkDittoFromRoll returns at its first guard because IsDitto
-	// is already true. Unhydrated, a reloaded roll-mark would be recorded as
-	// an independent detectDitto confirmation, the inflation derivecheck's
-	// roll_only column exists to prevent.
-	pokemon.populateInternal()
+	// Hydrated first (populateInternal at the top of this function).
+	// dittoRollMarked lives in GolbatInternal, so on a record loaded from
+	// the database or a preserved cache it reads false until populateInternal
+	// has run, and nothing else here guarantees that: setPokemonDisplay skips
+	// hydration when the boost state is unchanged, and maybeMarkDittoFromRoll
+	// returns at its first guard because IsDitto is already true. Unhydrated,
+	// a reloaded roll-mark would be recorded as an independent detectDitto
+	// confirmation, the inflation derivecheck's roll_only column exists to
+	// prevent.
 	wasRollMarked := pokemon.dittoRollMarked
 
 	// Captured before detectDitto for the same reason: it feeds
