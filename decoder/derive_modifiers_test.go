@@ -873,3 +873,33 @@ func TestModifierAgreedCellsOutliveGatedPending(t *testing.T) {
 		t.Fatalf("outside %v, want only cellD (cellA deviated after agreeing)", m.Outside)
 	}
 }
+
+// Growth that can reduce what is applied is reported as shrink: an
+// unexplained modifier's new in-cell, and a pin's new in-cell while another
+// confirmed pin of its slot exists in its scope and zone.
+func TestModifierLearnerDirtyGrowthAsShrink(t *testing.T) {
+	shrink := modDirty{changed: true, shrink: true}
+	l := newModifierLearner(defaultModifierParams())
+	for i := range 10 {
+		l.feed(modCheck(modT0.Add(time.Duration(i)*time.Second), cellA, withIVsDisagree), modZone)
+	}
+	if m := onlyActive(t, l); m.Status != modConfirmed || m.Type != modUnexplained {
+		t.Fatalf("modifier %+v, want confirmed unexplained", m)
+	}
+	l.takeDirty()
+	l.feed(modCheck(modT0.Add(10*time.Second), cellB, withIVsDisagree), modZone)
+	if got := l.takeDirty(); got != shrink {
+		t.Fatalf("unexplained new in-cell: %+v, want %+v", got, shrink)
+	}
+
+	l = newModifierLearner(defaultModifierParams())
+	confirmPin(t, l, modZone, modT0, cellA)
+	for i := range 10 {
+		l.feed(modCheck(modT0.Add(time.Duration(10+i)*time.Second), cellB, withCharged(300)), modZone)
+	}
+	l.takeDirty()
+	l.feed(modCheck(modT0.Add(30*time.Second), cellC, withCharged(494)), modZone)
+	if got := l.takeDirty(); got != shrink {
+		t.Fatalf("pin new in-cell with a confirmed peer: %+v, want %+v", got, shrink)
+	}
+}

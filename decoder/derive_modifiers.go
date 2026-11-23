@@ -452,7 +452,9 @@ func (l *modifierLearner) sweep(now time.Time) []modifierTransition {
 	return out
 }
 
-// active returns copies of the candidate and confirmed modifiers.
+// active returns full copies (Outside included) of the candidate and
+// confirmed modifiers. Test-only: the runtime publishes through
+// modifierRuntime.activeCopies.
 func (l *modifierLearner) active() []*derivationModifier {
 	out := make([]*derivationModifier, 0, len(l.activeTracks))
 	for _, t := range l.activeTracks {
@@ -465,12 +467,18 @@ func (l *modifierLearner) trackCount() int { return len(l.tracks) }
 
 // changed records a change to active modifier m that is not a transition,
 // and what it does to m's lookup coverage (growth and shrink count only for
-// a confirmed modifier). It bumps m's version.
+// a confirmed modifier). It bumps m's version. Growth that can reduce what
+// is applied counts as shrink, published at once: an unexplained modifier's
+// (wider suppression), or one whose scope and zone hold another confirmed
+// modifier it can dispute a value with (a new overlap withholds it).
 func (l *modifierLearner) changed(m *derivationModifier, c modChange) {
 	m.version++
 	l.dirty.changed = true
 	if m.Status != modConfirmed {
 		return
+	}
+	if c == modGrowth && (m.Type == modUnexplained || l.hasDisputingPeer(m)) {
+		c = modShrink
 	}
 	switch c {
 	case modGrowth:
@@ -478,6 +486,24 @@ func (l *modifierLearner) changed(m *derivationModifier, c modChange) {
 	case modShrink:
 		l.dirty.shrink = true
 	}
+}
+
+// hasDisputingPeer reports whether m's scope and zone hold another confirmed
+// modifier of m's type (for a pin, of its slot): where both cover a record
+// the value is disputed and withheld. Size has one track per scope and zone.
+func (l *modifierLearner) hasDisputingPeer(m *derivationModifier) bool {
+	if m.Type != modLevelOffset && m.Type != modMovePin {
+		return false
+	}
+	for _, o := range l.byScope[modScopeKey{m.Scope, m.Zone}] {
+		if o.mod == nil || o.mod == m || o.mod.Status != modConfirmed || o.key.Type != m.Type {
+			continue
+		}
+		if m.Type == modLevelOffset || o.key.Effect.Slot == m.Effect.Slot {
+			return true
+		}
+	}
+	return false
 }
 
 // takeDirty reports and clears the changes recorded since the last call.

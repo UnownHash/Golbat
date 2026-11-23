@@ -657,3 +657,88 @@ func TestAddEncounterPokemonFeedsLearnerWithRollMarkOnlyInternal(t *testing.T) {
 		t.Errorf("learner %d, events log %d; want 1 and 1", len(r.events), len(w.events))
 	}
 }
+
+// TestDerivationModifiersRuntimeUnexplainedGrowthAtOnce: a confirmed
+// unexplained modifier's new in-cell widens suppression, so it is published
+// at once, not with evidence.
+func TestDerivationModifiersRuntimeUnexplainedGrowthAtOnce(t *testing.T) {
+	r := newModifierRuntime(defaultModifierParams(), 64)
+	clock := modT0
+	r.clock = func() time.Time { return clock }
+	withModifierRuntime(t, r)
+	for i := range 10 {
+		r.handle(modCheck(modT0.Add(time.Duration(i)*time.Second), cellA, withIVsDisagree))
+	}
+	idx := derivationModifierIndex.Load()
+	if !idx.lookup(959, 3272, true, cellA, modZoneOf).Suppress {
+		t.Fatal("confirmed unexplained: cellA not suppressed")
+	}
+	if idx.lookup(959, 3272, true, cellB, modZoneOf).Suppress {
+		t.Fatal("cellB suppressed before any deviation there")
+	}
+	r.handle(modCheck(modT0.Add(10*time.Second), cellB, withIVsDisagree))
+	if !derivationModifierIndex.Load().lookup(959, 3272, true, cellB, modZoneOf).Suppress {
+		t.Error("unexplained growth into cellB not published at once")
+	}
+}
+
+// TestDerivationModifiersRuntimeConflictGrowthAtOnce: growth of a confirmed
+// pin whose scope and zone hold another confirmed pin of the same slot can
+// create a dispute, so it is published at once and the slot withheld.
+func TestDerivationModifiersRuntimeConflictGrowthAtOnce(t *testing.T) {
+	r := newModifierRuntime(defaultModifierParams(), 64)
+	clock := modT0
+	r.clock = func() time.Time { return clock }
+	withModifierRuntime(t, r)
+	ts := modT0
+	for range 10 {
+		r.handle(modCheck(ts, cellA, withCharged(494)))
+		ts = ts.Add(time.Second)
+	}
+	for range 10 {
+		r.handle(modCheck(ts, cellB, withCharged(300)))
+		ts = ts.Add(time.Second)
+	}
+	n := 0
+	for _, m := range activeDerivationModifiers() {
+		if m.Status == modConfirmed {
+			n++
+		}
+	}
+	if n != 2 {
+		t.Fatalf("%d confirmed pins, want 2", n)
+	}
+	if adj := derivationModifierIndex.Load().lookup(959, 3272, true, cellB, modZoneOf); adj.Charged != 300 {
+		t.Fatalf("cellB adjust %+v, want charged 300", adj)
+	}
+	r.handle(modCheck(ts, cellB, withCharged(494)))
+	adj := derivationModifierIndex.Load().lookup(959, 3272, true, cellB, modZoneOf)
+	if !adj.WithholdCharged || adj.Charged != 0 {
+		t.Errorf("after 494 grows into cellB: adjust %+v, want charged withheld at once", adj)
+	}
+}
+
+// TestDerivationModifiersRuntimeLevelConflictGrowthAtOnce: the same for two
+// level deltas: the dispute suppresses at once.
+func TestDerivationModifiersRuntimeLevelConflictGrowthAtOnce(t *testing.T) {
+	r := newModifierRuntime(defaultModifierParams(), 64)
+	clock := modT0
+	r.clock = func() time.Time { return clock }
+	withModifierRuntime(t, r)
+	ts := modT0
+	for range 10 {
+		r.handle(modCheck(ts, cellA, withLevelDelta(5), withSpecies(1, 0)))
+		ts = ts.Add(time.Second)
+	}
+	for range 10 {
+		r.handle(modCheck(ts, cellB, withLevelDelta(3), withSpecies(1, 0)))
+		ts = ts.Add(time.Second)
+	}
+	if adj := derivationModifierIndex.Load().lookup(1, 0, true, cellB, modZoneOf); adj.LevelDelta != 3 || adj.Suppress {
+		t.Fatalf("cellB adjust %+v, want delta 3", adj)
+	}
+	r.handle(modCheck(ts, cellB, withLevelDelta(5), withSpecies(1, 0)))
+	if adj := derivationModifierIndex.Load().lookup(1, 0, true, cellB, modZoneOf); !adj.Suppress {
+		t.Errorf("after +5 grows into cellB: adjust %+v, want suppressed at once", adj)
+	}
+}
