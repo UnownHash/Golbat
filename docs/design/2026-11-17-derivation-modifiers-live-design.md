@@ -1,6 +1,6 @@
 # Derivation Modifiers — Live Learner Design
 
-> **Status:** Agreed 2026-11-17, revised 2026-11-23 (§7, §8); building on branch
+> **Status:** Agreed 2026-11-17, revised 2026-11-23 (§7, §8, §9); building on branch
 > t3/encounter-override-heuristics (PR #441).
 
 - **Date:** 2026-11-17
@@ -273,7 +273,55 @@ before listing a new boundary. Strong size evidence counts only XL and XXL
 independent of record state; `start ≤ confirm ≤ 16`; `end` and
 `zone_wide_cells` are removed (ignored with a warning if set).
 
-## 9. Not included
+## 9. Third revision: apply only what the data supports (2026-11-23)
+
+A third review round (Fable, Codex) confirmed §8 fixed round 2's failures
+but found new wrong-value paths, mostly in venue coverage and in size
+records that never aged. Decisions with the project owner:
+
+**What applies.** Zone-wide forced moves, level offsets and size cutoffs
+(evidence: the 2026-11-15 forced moves and the Rattata size event).
+**Venue coverage is detected and listed, never applied**: the Safari +5 was
+a venue event, but no venue data has been captured yet. A modifier covered
+only by venue cells is listed (`applied: false`); venue cell changes are
+evidence, not coverage.
+
+**Zone-wide needs real spread.** Matches in the zone record must come from
+at least 8 distinct level-14 cells and span at least 10 km (largest distance
+between matching cell centres); different level-10 parents alone are not
+spread (two adjacent cells can straddle a level-10 edge). A scan area
+smaller than 10 km never applies a zone-wide modifier: withheld, not wrong.
+
+**Record entries age individually.** An entry older than `unseen` does not
+count towards a verdict; a record whose entries have all aged turns
+zone-wide off. A size record also ages on every IV-agreeing located roll of
+the scope, not only informative ones.
+
+**Disproof lasts.** A cell whose latest check of the dimension was not this
+modifier's effect stays excluded for the modifier's life until a matching
+check in that same cell (not until its entry leaves the 16-entry record). At
+most 256 excluded cells; past that, zone-wide turns off. For size, exclusion
+is per boundary: a cell is readmitted only when every boundary disproved
+there has a fresh match there.
+
+**Forms are independent.** A record's display form can change after its
+values were derived (the same spawn shown as another form). Values derived
+under the old form's scope, including any modifier, are re-derived for the
+new form; encounter-reported values are kept.
+
+**Repeated encounters.** No learner-side id map: the decode site's
+first-encounter gate (record state and seen type) is the only dedupe. A
+weather downgrade followed by a cache reload can let one spawn vote twice;
+accepted (one extra vote).
+
+**Smaller:** a candidate that has not confirmed within 2 × `unseen` of its
+start ends `unconfirmed`; candidate and `unconfirmed` transitions log at
+Debug; the learner's, the apply path's and the events writer's cell → zone
+caches are capped (cleared when they exceed 200,000 cells; recomputed on
+demand); every events-log row carries its bucket length so replay orders
+rows across a mid-file `bucket_minutes` change.
+
+## 10. Not included
 
 Loading a shared modifier file; retroactive correction; detection in the
 offline script by cell (the events log carries no per-cell agreements; the
