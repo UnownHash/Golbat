@@ -13,10 +13,13 @@ import (
 // roll seen — the pending deviations at the candidate, then every
 // IV-agreeing roll in an in-cell — so a boundary k/k+1's interval is [the
 // highest roll of a class <= k, the lowest of a class > k]. A modifier lists
-// the boundaries whose interval excludes the base cut. Agreements neither
-// count toward the end nor mark a cell outside: a contrary roll (one in a
-// listed boundary's disputed region that the base cut classifies) ends the
-// modifier in an in-cell and marks any other cell outside.
+// the boundaries whose interval excludes the base cut. Only deviations the
+// interval fit accepts are observations (matches); a refused roll is a
+// contradiction in an in-cell and makes any other cell outside (design §7).
+// Agreements neither count toward the end nor mark a cell outside: a
+// contrary roll (one in a listed boundary's disputed region that the base
+// cut classifies) ends the modifier in an in-cell and marks any other cell
+// outside.
 
 // sizeCut is one size class boundary: classes <= below lie under it.
 type sizeCut struct {
@@ -143,19 +146,21 @@ func (e *sizeEvidence) fill(dst map[string]sizeBoundary, cuts []sizeCut) bool {
 	return changed
 }
 
-// seed resets e to the rolls of the pending deviations with a cell, in
-// time order, leaving out one that would empty an interval, and returns the
-// listed boundaries.
-func (e *sizeEvidence) seed(pending []modPending, cuts []sizeCut) map[string]sizeBoundary {
-	*e = sizeEvidence{}
-	for _, pd := range pending {
-		if pd.Cell != 0 && pd.Class >= 1 && pd.Class <= 5 {
-			*e, _, _ = e.try(pd.Class, pd.Roll, cuts)
-		}
+// seedRoll adds a pending deviation's roll to e when it has a cell and
+// reports whether the interval fit accepts it (false: it would empty an
+// interval and is left out).
+func (e *sizeEvidence) seedRoll(pd modPending, cuts []sizeCut) bool {
+	if pd.Class < 1 || pd.Class > 5 {
+		return false
 	}
-	out := make(map[string]sizeBoundary, len(cuts))
-	e.fill(out, cuts)
-	return out
+	next, changed, refused := e.try(pd.Class, pd.Roll, cuts)
+	if refused {
+		return false
+	}
+	if changed && pd.Cell != 0 {
+		*e = next
+	}
+	return true
 }
 
 // contrary reports whether a roll of class cls lies in a listed boundary's
@@ -192,9 +197,9 @@ func (l *modifierLearner) sizeTrack(scope modifierScope, zone string) *modTrack 
 }
 
 // sizeDeviation counts an IV-agreeing size deviation for its species'
-// track. With a modifier active, a roll that would empty an interval is a
-// contradiction (in an in-cell) and otherwise left out, unmatched; any other
-// roll with a cell is evidence (its cell becomes an in-cell).
+// track. With a modifier active, a roll that would empty an interval is not
+// matched but contradicts (contradict); any other roll with a cell is
+// evidence (its cell becomes an in-cell).
 func (l *modifierLearner) sizeDeviation(ev modifierEvent, species modifierScope, zone string,
 	now time.Time, out []modifierTransition) []modifierTransition {
 	if !sizeOpinion(ev) {
@@ -205,11 +210,10 @@ func (l *modifierLearner) sizeDeviation(ev modifierEvent, species modifierScope,
 		cuts := sizeCuts(t.key.Scope.Strong)
 		next, changed, refused := t.size.try(ev.ObsSize, ev.SizeRoll, cuts)
 		if refused {
-			if _, in := mod.InCells[ev.Cell]; in && ev.Cell != 0 {
-				mod.Contradictions++
-				l.changed(mod, false)
+			if ev.Cell == 0 {
+				return out
 			}
-			return out
+			return l.contradict(t, ev.Cell, now, out)
 		}
 		if changed && ev.Cell != 0 {
 			*t.size = next
@@ -223,7 +227,8 @@ func (l *modifierLearner) sizeDeviation(ev modifierEvent, species modifierScope,
 
 // sizeAgreement applies an IV- and size-agreeing check to t's modifier: a
 // contrary roll ends it in an in-cell and marks any other cell outside; any
-// other roll in an in-cell is evidence unless it would empty an interval.
+// other roll in an in-cell is evidence, or a contradiction when it would
+// empty an interval.
 func (l *modifierLearner) sizeAgreement(t *modTrack, ev modifierEvent, now time.Time,
 	out []modifierTransition) []modifierTransition {
 	mod := t.mod
@@ -242,7 +247,11 @@ func (l *modifierLearner) sizeAgreement(t *modTrack, ev modifierEvent, now time.
 	if !in {
 		return out
 	}
-	if next, changed, _ := t.size.try(ev.ObsSize, ev.SizeRoll, cuts); changed {
+	next, changed, refused := t.size.try(ev.ObsSize, ev.SizeRoll, cuts)
+	if refused {
+		return l.contradict(t, ev.Cell, now, out)
+	}
+	if changed {
 		*t.size = next
 		if t.size.fill(mod.Boundaries, cuts) {
 			l.changed(mod, true)

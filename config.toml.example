@@ -79,16 +79,19 @@ retain_days = 14
 # derivation_modifiers: opt-in, needs derive_iv. Learns event modifiers (a level offset, a forced
 # move, moved size cuts, or an unexplained mismatch) from live encounter checks, per timezone and
 # ~1 km (level-14 S2) cell, and applies confirmed ones to derived values. start deviations within
-# window_seconds open a candidate; once it has confirm deviations in all (no time limit) and no
-# contradiction it is confirmed. end agreements in its region end it, as does not seeing its species
-# there for unseen_seconds. A modifier seen in zone_wide_cells cells with no
-# agreeing cell covers its whole timezone. Transitions are logged as [DERIVE_MODIFIER]; state is in
-# memory only (a restart relearns). Enabling it reserves ~1 MB for the event queue.
+# window_seconds open a candidate; it is confirmed once it has confirm deviations in all (no time
+# limit), no contradiction among its last 16 outcomes in its cells, and matches in at least half of
+# them. end consecutive agreements in its cells end it (8: at most Dragonite's sampled hourly
+# minimum, so an event that ends on the hour stops applying within the next hour), as do start
+# contradictions outnumbering its matches among the last 16, or not seeing its species there for
+# unseen_seconds. A modifier seen in zone_wide_cells cells spread over ~10 km with no agreeing cell
+# covers its whole timezone. Transitions are logged as [DERIVE_MODIFIER]; state is in memory only
+# (a restart relearns). Enabling it reserves ~1 MB for the event queue.
 [derivation_modifiers]
 enabled = false
 start = 3
 confirm = 10
-end = 20
+end = 8
 window_seconds = 1800
 unseen_seconds = 3600
 zone_wide_cells = 3

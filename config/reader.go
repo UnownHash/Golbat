@@ -65,7 +65,7 @@ func ReadConfig(configPath string) (configDefinition, error) {
 		DerivationModifiers: derivationModifiers{
 			Start:         3,
 			Confirm:       10,
-			End:           20,
+			End:           8,
 			ZoneWideCells: 3,
 			WindowSeconds: 1800,
 			UnseenSeconds: 3600,

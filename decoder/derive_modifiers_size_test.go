@@ -219,3 +219,29 @@ func TestModifierSizeCellZeroNotEvidence(t *testing.T) {
 		t.Fatalf("boundaries %v observations %d, want unchanged %v and the deviation counted", m.Boundaries, m.Observations, before)
 	}
 }
+
+// TestModifierSizeRefusedRollIsContra: a roll the interval fit refuses is
+// not an observation and, in an in-cell, is a contradiction in the ring, so
+// the candidate does not confirm while it is there.
+func TestModifierSizeRefusedRollIsContra(t *testing.T) {
+	l := newModifierLearner(defaultModifierParams())
+	trs := feedAll(l, modZone,
+		modCheck(modT0, cellA, withSize(0.010, 1)),
+		modCheck(modT0.Add(time.Second), cellA, withSize(0.003, 2)),
+		modCheck(modT0.Add(2*time.Second), cellA, withSize(0.009, 1)))
+	if len(trs) != 1 || trs[0].State != modCandidate {
+		t.Fatalf("transitions %v, want one candidate", states(trs))
+	}
+	if m := trs[0].Mod; m.Observations != 2 || m.Contradictions != 1 {
+		t.Fatalf("observations %d contradictions %d, want 2 and 1", m.Observations, m.Contradictions)
+	}
+	for i := range 8 {
+		trs = l.feed(modCheck(modT0.Add(time.Duration(3+i)*time.Second), cellA, withSize(0.0042+0.0006*float64(i), 1)), modZone)
+		if len(trs) != 0 {
+			t.Fatalf("roll %d: %v, want no transition", i, states(trs))
+		}
+	}
+	if m := onlyActive(t, l); m.Status != modCandidate || m.Observations != 10 {
+		t.Fatalf("status %v observations %d, want a candidate with 10", m.Status, m.Observations)
+	}
+}

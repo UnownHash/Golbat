@@ -105,13 +105,14 @@ type derivationEvents struct {
 // (docs/design/2026-11-17-derivation-modifiers-live-design.md).
 type derivationModifiers struct {
 	Enabled bool `koanf:"enabled"`
-	// Start deviations open a candidate, Confirm confirm it, End agreements
-	// in its region end it.
+	// Start deviations open a candidate, Confirm confirm it (with no
+	// contradiction and matches at least half its last 16 in-cell outcomes),
+	// End consecutive in-cell agreements end it.
 	Start   int `koanf:"start"`   // default 3
 	Confirm int `koanf:"confirm"` // default 10
-	End     int `koanf:"end"`     // default 20
-	// ZoneWideCells in-cells and no outside cell make a modifier cover its
-	// whole timezone.
+	End     int `koanf:"end"`     // default 8
+	// ZoneWideCells in-cells under two or more level-10 cells and no outside
+	// cell make a modifier cover its whole (known) timezone.
 	ZoneWideCells int `koanf:"zone_wide_cells"` // default 3
 	// WindowSeconds bounds how far apart pending deviations may be;
 	// UnseenSeconds ends a modifier whose scope was not seen in its region.

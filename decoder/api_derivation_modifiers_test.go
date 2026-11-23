@@ -19,15 +19,15 @@ func TestApiDerivationModifiersShape(t *testing.T) {
 	}()
 
 	start := time.Date(2026, 11, 15, 9, 0, 0, 0, time.UTC)
-	pin := &derivationModifier{Type: modMovePin, Scope: modifierScope{PokemonID: 959, Form: 3272, Strong: true},
+	pin := withSpread(&derivationModifier{Type: modMovePin, Scope: modifierScope{PokemonID: 959, Form: 3272, Strong: true},
 		Effect: modifierEffect{Slot: modSlotCharged, Move: 494}, Zone: "Europe/London", Status: modConfirmed,
-		Start: start, Observations: 14, InCells: zoneWideIn(), Outside: map[s2.CellID]struct{}{}}
+		Start: start, Observations: 14, InCells: zoneWideIn(), Outside: map[s2.CellID]struct{}{}})
 	size := &derivationModifier{Type: modSizeCutoffs, Scope: modifierScope{PokemonID: 1},
 		Boundaries: map[string]sizeBoundary{"1/2": {Lo: 0.5, HasLo: true}},
 		Zone:       "Europe/London", Status: modCandidate, Start: start.Add(time.Hour),
 		InCells: cellSet(adjCellA.Next(), adjCellA), Outside: cellSet(adjCellA.Prev())}
-	unexp := &derivationModifier{Type: modUnexplained, Scope: modifierScope{PokemonID: 2, Form: 5, Strong: true},
-		Zone: "Europe/London", Status: modCandidate, Start: start, InCells: zoneWideIn(), Outside: map[s2.CellID]struct{}{}}
+	unexp := withSpread(&derivationModifier{Type: modUnexplained, Scope: modifierScope{PokemonID: 2, Form: 5, Strong: true},
+		Zone: "Europe/London", Status: modCandidate, Start: start, InCells: zoneWideIn(), Outside: map[s2.CellID]struct{}{}})
 	mods := []*derivationModifier{size, pin, unexp}
 	derivationModifierSnapshot.Store(&mods)
 
@@ -88,9 +88,9 @@ func TestApiDerivationModifiersSortByZoneWithinID(t *testing.T) {
 	t.Cleanup(func() { derivationModifierSnapshot.Store(nil) })
 	start := time.Date(2026, 11, 15, 9, 0, 0, 0, time.UTC)
 	mk := func(zone string) *derivationModifier {
-		return &derivationModifier{Type: modMovePin, Scope: modifierScope{PokemonID: 959, Form: 3272, Strong: true},
+		return withSpread(&derivationModifier{Type: modMovePin, Scope: modifierScope{PokemonID: 959, Form: 3272, Strong: true},
 			Effect: modifierEffect{Slot: modSlotCharged, Move: 494}, Zone: zone, Status: modConfirmed,
-			Start: start, InCells: zoneWideIn(), Outside: map[s2.CellID]struct{}{}}
+			Start: start, InCells: zoneWideIn(), Outside: map[s2.CellID]struct{}{}})
 	}
 	mods := []*derivationModifier{mk("Europe/Paris"), mk("America/New_York"), mk("Europe/London")}
 	derivationModifierSnapshot.Store(&mods)
@@ -116,7 +116,7 @@ func TestApiDerivationModifiersRuntimeZoneWideCells(t *testing.T) {
 	})
 	config.Config.DerivationModifiers.ZoneWideCells = 3
 	derivationModifierRuntime, derivationModifierLearnerOn = &modifierRuntime{zoneWideCells: 2}, true
-	m := levelMod(modifierScope{PokemonID: 1}, 5, "Europe/London", cellSet(adjCellA, adjCellA.Next()))
+	m := levelMod(modifierScope{PokemonID: 1}, 5, "Europe/London", cellSet(adjCellA, adjCellFar))
 	m.Start = time.Date(2026, 11, 15, 9, 0, 0, 0, time.UTC)
 	mods := []*derivationModifier{m}
 	derivationModifierSnapshot.Store(&mods)

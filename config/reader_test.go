@@ -68,8 +68,8 @@ func TestDerivationModifiersConfigDefaults(t *testing.T) {
 		t.Fatalf("ReadConfig(%s): %v", path, err)
 	}
 	m := cfg.DerivationModifiers
-	if m.Enabled || m.Start != 3 || m.Confirm != 10 || m.End != 20 ||
+	if m.Enabled || m.Start != 3 || m.Confirm != 10 || m.End != 8 ||
 		m.WindowSeconds != 1800 || m.UnseenSeconds != 3600 || m.ZoneWideCells != 3 {
-		t.Errorf("DerivationModifiers = %+v, want disabled, 3/10/20/1800/3600/3", m)
+		t.Errorf("DerivationModifiers = %+v, want disabled, 3/10/8/1800/3600/3", m)
 	}
 }

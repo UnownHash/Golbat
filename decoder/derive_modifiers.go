@@ -154,19 +154,45 @@ type derivationModifier struct {
 	// transition's time; LastSeen the latest check or sighting of the scope
 	// in the modifier's region.
 	Start, End, LastSeen time.Time
-	EndReason            string // "agreement" | "contrary" | "unseen"
-	Observations         int
-	Contradictions       int
+	EndReason            string // "agreement" | "contradicted" | "contrary" | "unseen"
+	// Observations counts matching deviations (for size, accepted rolls);
+	// Contradictions is the lifetime count of in-cell contradictions.
+	Observations   int
+	Contradictions int
 	// InCells holds the cells with a matching deviation; Outside the cells
-	// that agreed on the dimension while the modifier was active and are not
-	// in-cells.
+	// that agreed on the dimension (or contradicted it) and are not in-cells.
+	// InCells only grows: add cells with addInCell.
 	InCells, Outside map[s2.CellID]struct{}
+	// parent10 is the modZoneWideSpreadLevel parent of the first in-cell;
+	// spread is set once an in-cell lies under another one.
+	parent10 s2.CellID
+	spread   bool
+	// outsideUnknown: agreements before the candidate overflowed its track's
+	// cell list, so an outside cell may be missing from Outside.
+	outsideUnknown bool
 }
 
-// ZoneWide reports whether m covers its whole zone: at least zoneWideCells
-// in-cells and no outside cell.
+// modZoneWideSpreadLevel: a zone-wide modifier needs in-cells under at
+// least two cells of this level (~10 km), so one venue stays local.
+const modZoneWideSpreadLevel = 10
+
+// addInCell makes cell an in-cell, keeping the spread flag.
+func (m *derivationModifier) addInCell(cell s2.CellID) {
+	m.InCells[cell] = struct{}{}
+	p := cell.Parent(modZoneWideSpreadLevel)
+	if m.parent10 == 0 {
+		m.parent10 = p
+	} else if p != m.parent10 {
+		m.spread = true
+	}
+}
+
+// ZoneWide reports whether m covers its whole zone: a known zone, at least
+// zoneWideCells in-cells under two or more level-10 cells, and no outside
+// cell.
 func (m *derivationModifier) ZoneWide(zoneWideCells int) bool {
-	return len(m.InCells) >= zoneWideCells && len(m.Outside) == 0
+	return m.Zone != "" && m.spread && len(m.InCells) >= zoneWideCells &&
+		len(m.Outside) == 0 && !m.outsideUnknown
 }
 
 // Covers reports whether a record in zone and cell is in m's region: its
@@ -191,14 +217,14 @@ func (m *derivationModifier) clone() *derivationModifier {
 	return &c
 }
 
-// modifierParams are the learner's thresholds (design §3).
+// modifierParams are the learner's thresholds (design §3, §7).
 type modifierParams struct {
 	Start, Confirm, End, ZoneWideCells int
 	Window, Unseen                     time.Duration
 }
 
 func defaultModifierParams() modifierParams {
-	return modifierParams{Start: 3, Confirm: 10, End: 20, ZoneWideCells: 3,
+	return modifierParams{Start: 3, Confirm: 10, End: 8, ZoneWideCells: 3,
 		Window: 30 * time.Minute, Unseen: time.Hour}
 }
 
@@ -258,9 +284,58 @@ type modPending struct {
 	Class           uint8
 }
 
-// modTrack is one (type, scope, effect, zone): its recent deviations while
-// it has no modifier, else the modifier and the in-cell agreements since its
-// last matching deviation.
+// modAgreed is a cell where a gated track's dimension agreed before it had
+// a modifier, and the latest such agreement.
+type modAgreed struct {
+	Cell s2.CellID
+	Unix int64
+}
+
+// modAgreedCap bounds a track's pre-candidate agreeing cells.
+const modAgreedCap = 64
+
+// modOutcome is one in-cell outcome on a modifier's dimension.
+type modOutcome uint8
+
+const (
+	modOutMatch  modOutcome = iota + 1 // its effect
+	modOutAgree                        // the base value
+	modOutContra                       // another effect of its type, scope and slot
+)
+
+const modRingSize = 16
+
+// modRing holds a modifier's last modRingSize in-cell outcomes.
+type modRing struct {
+	buf     [modRingSize]modOutcome
+	head, n uint8
+}
+
+func (r *modRing) push(o modOutcome) {
+	r.buf[r.head] = o
+	r.head = (r.head + 1) % modRingSize
+	if r.n < modRingSize {
+		r.n++
+	}
+}
+
+// counts returns the matches and contradictions in the ring and how many
+// entries it holds.
+func (r *modRing) counts() (match, contra, filled int) {
+	for _, o := range r.buf[:r.n] {
+		switch o {
+		case modOutMatch:
+			match++
+		case modOutContra:
+			contra++
+		}
+	}
+	return match, contra, int(r.n)
+}
+
+// modTrack is one (type, scope, effect, zone): its recent deviations and
+// agreeing cells while it has no modifier, else the modifier, its outcome
+// ring and the in-cell agreements since its last in-cell match.
 type modTrack struct {
 	key  modTrackKey
 	dim  modDim
@@ -269,7 +344,14 @@ type modTrack struct {
 	// level offset).
 	twoSpecies bool
 	pending    []modPending // time order, oldest first
+	// agreed: the cells where the dimension agreed within Window, gated
+	// tracks without a modifier only; overflowAt the latest agreement left
+	// out because agreed was full (0 = none).
+	agreed     []modAgreed
+	overflowAt int64
+	lastDev    int64 // latest matching deviation while without a modifier
 	mod        *derivationModifier
+	ring       modRing
 	endOK      int
 	size       *sizeEvidence // size_cutoffs tracks only
 }
@@ -372,7 +454,9 @@ func (l *modifierLearner) markOutside(m *derivationModifier, cell s2.CellID) {
 
 // observe applies a check or sighting to the existing tracks of one scope:
 // it marks active modifiers seen, and an agreement on a track's dimension
-// gates its pending deviations or counts toward its end.
+// gates its pending deviations and records its cell, or (with a modifier)
+// is an in-cell agreement outcome counting toward the end, or makes its
+// cell outside. A move check agreeing with the pinned move says nothing.
 func (l *modifierLearner) observe(sk modScopeKey, ev modifierEvent, now time.Time,
 	out []modifierTransition) []modifierTransition {
 	for _, t := range l.byScope[sk] {
@@ -386,9 +470,13 @@ func (l *modifierLearner) observe(sk modScopeKey, ev modifierEvent, now time.Tim
 			out = l.sizeAgreement(t, ev, now, out)
 			continue
 		}
+		if t.pinHeld(ev) {
+			continue
+		}
 		if t.mod == nil {
 			if t.gate {
 				t.clearCell(ev.Cell, ev.Unix)
+				t.noteAgreed(ev.Cell, ev.Unix)
 			}
 			continue
 		}
@@ -399,10 +487,43 @@ func (l *modifierLearner) observe(sk modScopeKey, ev modifierEvent, now time.Tim
 			l.markOutside(t.mod, ev.Cell)
 			continue
 		}
+		t.ring.push(modOutAgree)
 		t.endOK++
 		if t.endOK >= l.p.End {
 			out = append(out, l.end(t, now, "agreement"))
+			continue
 		}
+		out = l.settle(t, now, out)
+	}
+	return out
+}
+
+// pinHeld reports whether ev's move in t's slot is t's pinned move: the
+// check agrees with the base walk and the pin alike, so says nothing.
+func (t *modTrack) pinHeld(ev modifierEvent) bool {
+	switch {
+	case t.key.Type != modMovePin:
+		return false
+	case t.dim == modDimQuick:
+		return ev.ObsQuick == t.key.Effect.Move
+	}
+	return ev.ObsCharged == t.key.Effect.Move
+}
+
+// settle applies t's outcome ring to its modifier (design §7): it ends by
+// contradiction with at least Start contradictions and no fewer than
+// matches, and a candidate confirms with Confirm observations, no
+// contradiction and matches at least half the ring (size: no majority).
+func (l *modifierLearner) settle(t *modTrack, now time.Time, out []modifierTransition) []modifierTransition {
+	mod := t.mod
+	match, contra, filled := t.ring.counts()
+	if contra >= l.p.Start && contra >= match {
+		return append(out, l.end(t, now, "contradicted"))
+	}
+	if mod.Status == modCandidate && mod.Observations >= l.p.Confirm && contra == 0 &&
+		(t.size != nil || 2*match >= filled) {
+		mod.Status = modConfirmed
+		out = append(out, modifierTransition{At: now, State: modConfirmed, Mod: mod.clone()})
 	}
 	return out
 }
@@ -460,9 +581,9 @@ func (l *modifierLearner) track(key modTrackKey, dim modDim, twoSpecies bool) *m
 	return t
 }
 
-// matchContradicting counts a deviation for t after contradicting every
+// matchContradicting counts a deviation for t after applying it to every
 // other active modifier of t's type, scope and dimension (another delta or
-// move) that has the deviation's cell as an in-cell.
+// move): a contradiction in one of its in-cells, else its cell is outside.
 func (l *modifierLearner) matchContradicting(t *modTrack, ev modifierEvent, now time.Time,
 	out []modifierTransition) []modifierTransition {
 	if ev.Cell != 0 {
@@ -470,13 +591,24 @@ func (l *modifierLearner) matchContradicting(t *modTrack, ev modifierEvent, now 
 			if o == t || o.mod == nil || o.key.Type != t.key.Type || o.dim != t.dim {
 				continue
 			}
-			if _, in := o.mod.InCells[ev.Cell]; in {
-				o.mod.Contradictions++
-				l.changed(o.mod, false)
-			}
+			out = l.contradict(o, ev.Cell, now, out)
 		}
 	}
 	return l.match(t, ev, now, out)
+}
+
+// contradict applies a contradiction in cell to o's modifier: in an in-cell
+// it is counted in the ring, otherwise it makes cell outside.
+func (l *modifierLearner) contradict(o *modTrack, cell s2.CellID, now time.Time,
+	out []modifierTransition) []modifierTransition {
+	if _, in := o.mod.InCells[cell]; !in {
+		l.markOutside(o.mod, cell)
+		return out
+	}
+	o.mod.Contradictions++
+	o.ring.push(modOutContra)
+	l.changed(o.mod, false)
+	return l.settle(o, now, out)
 }
 
 // match counts one matching deviation for t.
@@ -486,62 +618,90 @@ func (l *modifierLearner) match(t *modTrack, ev modifierEvent, now time.Time,
 	if t.mod == nil {
 		t.pending = append(t.pending, modPending{Unix: ev.Unix, Cell: ev.Cell, Roll: ev.SizeRoll,
 			PokemonID: ev.PokemonID, Form: ev.Form, Class: ev.ObsSize})
-		cut := ev.Unix - int64(p.Window/time.Second)
-		i := 0
-		for i < len(t.pending) && t.pending[i].Unix < cut {
-			i++
-		}
-		t.pending = t.pending[i:]
+		t.lastDev = max(t.lastDev, ev.Unix)
+		t.pruneBefore(ev.Unix - int64(p.Window/time.Second))
 		if len(t.pending) < p.Start || (t.twoSpecies && !t.pendingHasTwoSpecies()) {
 			return out
 		}
-		mod := &derivationModifier{
-			Type: t.key.Type, Scope: t.key.Scope, Effect: t.key.Effect, Zone: t.key.Zone,
-			Status:       modCandidate,
-			Start:        time.Unix(t.pending[0].Unix, 0).UTC(),
-			LastSeen:     now,
-			Observations: len(t.pending),
-			InCells:      make(map[s2.CellID]struct{}),
-			Outside:      make(map[s2.CellID]struct{}),
-		}
-		for _, pd := range t.pending {
-			if pd.Cell != 0 {
-				mod.InCells[pd.Cell] = struct{}{}
-			}
-		}
-		if t.size != nil {
-			mod.Boundaries = t.size.seed(t.pending, sizeCuts(t.key.Scope.Strong))
-		}
-		t.pending, t.mod, t.endOK = nil, mod, 0
-		l.activeTracks = append(l.activeTracks, t)
-		out = append(out, modifierTransition{At: now, State: modCandidate, Mod: mod.clone()})
-		if mod.Observations >= p.Confirm {
-			mod.Status = modConfirmed
-			out = append(out, modifierTransition{At: now, State: modConfirmed, Mod: mod.clone()})
-		}
-		return out
+		return l.open(t, ev.Unix-int64(p.Window/time.Second), now, out)
 	}
 
 	mod := t.mod
 	mod.Observations++
-	t.endOK = 0
 	coverage := false
 	if ev.Cell != 0 {
 		wasZoneWide := mod.ZoneWide(p.ZoneWideCells)
 		_, wasIn := mod.InCells[ev.Cell]
-		mod.InCells[ev.Cell] = struct{}{}
+		mod.addInCell(ev.Cell)
 		delete(mod.Outside, ev.Cell)
 		coverage = !wasIn || wasZoneWide != mod.ZoneWide(p.ZoneWideCells)
+		t.ring.push(modOutMatch)
+		t.endOK = 0
 	}
 	l.changed(mod, coverage)
 	if now.After(mod.LastSeen) {
 		mod.LastSeen = now
 	}
-	if mod.Status == modCandidate && mod.Observations >= p.Confirm && mod.Contradictions == 0 {
-		mod.Status = modConfirmed
-		out = append(out, modifierTransition{At: now, State: modConfirmed, Mod: mod.clone()})
+	return l.settle(t, now, out)
+}
+
+// open makes t's pending deviations a candidate. Each is an observation and
+// a match in its cell, except a size roll the interval fit refuses: that is
+// a contradiction in an in-cell and makes any other cell outside, as does
+// an agreement since cut that no later deviation in its cell overrode.
+func (l *modifierLearner) open(t *modTrack, cut int64, now time.Time,
+	out []modifierTransition) []modifierTransition {
+	mod := &derivationModifier{
+		Type: t.key.Type, Scope: t.key.Scope, Effect: t.key.Effect, Zone: t.key.Zone,
+		Status:   modCandidate,
+		Start:    time.Unix(t.pending[0].Unix, 0).UTC(),
+		LastSeen: now,
+		InCells:  make(map[s2.CellID]struct{}),
+		Outside:  make(map[s2.CellID]struct{}),
 	}
-	return out
+	t.ring = modRing{}
+	var cuts []sizeCut
+	if t.size != nil {
+		cuts = sizeCuts(t.key.Scope.Strong)
+		*t.size = sizeEvidence{}
+	}
+	var refused []s2.CellID
+	for _, pd := range t.pending {
+		if t.size != nil && !t.size.seedRoll(pd, cuts) {
+			if pd.Cell != 0 {
+				refused = append(refused, pd.Cell)
+			}
+			continue
+		}
+		mod.Observations++
+		if pd.Cell != 0 {
+			mod.addInCell(pd.Cell)
+			t.ring.push(modOutMatch)
+		}
+	}
+	for _, c := range refused {
+		if _, in := mod.InCells[c]; in {
+			mod.Contradictions++
+			t.ring.push(modOutContra)
+		} else {
+			mod.Outside[c] = struct{}{}
+		}
+	}
+	for _, a := range t.agreed {
+		if _, in := mod.InCells[a.Cell]; !in {
+			mod.Outside[a.Cell] = struct{}{}
+		}
+	}
+	mod.outsideUnknown = t.overflowAt != 0 && t.overflowAt >= cut
+	if t.size != nil {
+		mod.Boundaries = make(map[string]sizeBoundary, len(cuts))
+		t.size.fill(mod.Boundaries, cuts)
+	}
+	t.pending, t.agreed, t.overflowAt = nil, nil, 0
+	t.mod, t.endOK = mod, 0
+	l.activeTracks = append(l.activeTracks, t)
+	out = append(out, modifierTransition{At: now, State: modCandidate, Mod: mod.clone()})
+	return l.settle(t, now, out)
 }
 
 func (t *modTrack) pendingHasTwoSpecies() bool {
@@ -552,6 +712,46 @@ func (t *modTrack) pendingHasTwoSpecies() bool {
 		}
 	}
 	return false
+}
+
+// noteAgreed records an agreement in cell at unix for a track without a
+// modifier; past modAgreedCap cells it only records the overflow.
+func (t *modTrack) noteAgreed(cell s2.CellID, unix int64) {
+	if cell == 0 {
+		return
+	}
+	for i := range t.agreed {
+		if t.agreed[i].Cell == cell {
+			t.agreed[i].Unix = max(t.agreed[i].Unix, unix)
+			return
+		}
+	}
+	if len(t.agreed) >= modAgreedCap {
+		t.overflowAt = max(t.overflowAt, unix)
+		return
+	}
+	t.agreed = append(t.agreed, modAgreed{cell, unix})
+}
+
+// pruneBefore drops t's pending deviations and agreeing cells older than
+// cut, and an overflow older than cut.
+func (t *modTrack) pruneBefore(cut int64) {
+	i := 0
+	for i < len(t.pending) && t.pending[i].Unix < cut {
+		i++
+	}
+	t.pending = t.pending[i:]
+	kept := t.agreed[:0]
+	for _, a := range t.agreed {
+		if a.Unix >= cut {
+			kept = append(kept, a)
+		}
+	}
+	clear(t.agreed[len(kept):])
+	t.agreed = kept
+	if t.overflowAt < cut {
+		t.overflowAt = 0
+	}
 }
 
 // clearCell drops t's pending deviations from cell at or before unix.
@@ -570,7 +770,7 @@ func (t *modTrack) clearCell(cell s2.CellID, unix int64) {
 func (l *modifierLearner) end(t *modTrack, at time.Time, reason string) modifierTransition {
 	mod := t.mod
 	mod.Status, mod.End, mod.EndReason = modEnded, at, reason
-	t.mod, t.endOK = nil, 0
+	t.mod, t.endOK, t.ring = nil, 0, modRing{}
 	for i, a := range l.activeTracks {
 		if a == t {
 			l.activeTracks = append(l.activeTracks[:i], l.activeTracks[i+1:]...)
@@ -590,8 +790,9 @@ func (l *modifierLearner) endUnseen(now time.Time, out []modifierTransition) []m
 	return out
 }
 
-// prune drops pending deviations older than Window before unix, then the
-// tracks left with neither a modifier nor a pending deviation.
+// prune drops pending deviations and agreeing cells older than Window
+// before unix, then the tracks with no modifier and no deviation within
+// Window (pending, or gated away by an agreement).
 func (l *modifierLearner) prune(unix int64) {
 	l.nextPrune = unix + modPruneInterval
 	cut := unix - int64(l.p.Window/time.Second)
@@ -599,12 +800,8 @@ func (l *modifierLearner) prune(unix int64) {
 		if t.mod != nil {
 			continue
 		}
-		i := 0
-		for i < len(t.pending) && t.pending[i].Unix < cut {
-			i++
-		}
-		t.pending = t.pending[i:]
-		if len(t.pending) > 0 {
+		t.pruneBefore(cut)
+		if len(t.pending) > 0 || t.lastDev >= cut {
 			continue
 		}
 		delete(l.tracks, key)

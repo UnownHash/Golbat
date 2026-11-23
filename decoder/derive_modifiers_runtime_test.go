@@ -113,7 +113,7 @@ func TestDerivationModifiersZoneCellZero(t *testing.T) {
 func setModifierConfig() {
 	m := &config.Config.DerivationModifiers
 	m.Enabled = true
-	m.Start, m.Confirm, m.End, m.ZoneWideCells = 3, 10, 20, 3
+	m.Start, m.Confirm, m.End, m.ZoneWideCells = 3, 10, 8, 3
 	m.WindowSeconds, m.UnseenSeconds = 1800, 3600
 }
 

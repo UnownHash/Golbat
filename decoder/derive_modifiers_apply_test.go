@@ -24,6 +24,8 @@ const (
 var (
 	adjCellA = modifierCell(0, adjLatA, adjLonA)
 	adjCellB = modifierCell(0, adjLatB, adjLonB)
+	// adjCellFar is ~20 km north of adjCellA, under another level-10 cell.
+	adjCellFar = modifierCell(0, adjLatA+0.2, adjLonA)
 )
 
 // withModifierIndex publishes an index built from mods for one test.
@@ -43,14 +45,24 @@ func cellSet(cells ...s2.CellID) map[s2.CellID]struct{} {
 	return m
 }
 
-// zoneWideIn is a set of in-cells large enough to make a modifier zone-wide.
+// zoneWideIn is a set of in-cells large enough, and spread under two
+// level-10 cells, to make a modifier zone-wide (with withSpread).
 func zoneWideIn() map[s2.CellID]struct{} {
-	return cellSet(adjCellA, adjCellA.Next(), adjCellA.Prev())
+	return cellSet(adjCellA, adjCellA.Next(), adjCellFar)
+}
+
+// withSpread sets m's level-10 spread from its in-cells, as the learner's
+// addInCell keeps it.
+func withSpread(m *derivationModifier) *derivationModifier {
+	for c := range m.InCells {
+		m.addInCell(c)
+	}
+	return m
 }
 
 func levelMod(scope modifierScope, delta int32, zone string, in map[s2.CellID]struct{}) *derivationModifier {
-	return &derivationModifier{Type: modLevelOffset, Scope: scope, Effect: modifierEffect{Delta: delta},
-		Zone: zone, Status: modConfirmed, InCells: in, Outside: map[s2.CellID]struct{}{}}
+	return withSpread(&derivationModifier{Type: modLevelOffset, Scope: scope, Effect: modifierEffect{Delta: delta},
+		Zone: zone, Status: modConfirmed, InCells: in, Outside: map[s2.CellID]struct{}{}})
 }
 
 // adjRecord is a wild record of species 1 at lat/lon, strong or not.
@@ -261,10 +273,13 @@ func TestDerivationAdjustLocalRegion(t *testing.T) {
 	}
 }
 
-func TestDerivationAdjustZoneWideCoversUnknownCell(t *testing.T) {
+// TestDerivationAdjustZoneUnknownNotZoneWide: a modifier in the unknown
+// zone "" is never zone-wide (design §7), so it covers neither cell 0 nor a
+// cell outside its in-cells.
+func TestDerivationAdjustZoneUnknownNotZoneWide(t *testing.T) {
 	idx := buildModifierIndex([]*derivationModifier{levelMod(modifierScope{PokemonID: 1}, 5, "", zoneWideIn())}, adjZoneWide)
-	if adj := idx.lookup(1, 0, false, 0, modifierZoneOf); adj.LevelDelta != 5 {
-		t.Errorf("zone-wide in zone \"\" for cell 0: delta %d, want 5", adj.LevelDelta)
+	if adj := idx.lookup(1, 0, false, 0, modifierZoneOf); adj.LevelDelta != 0 {
+		t.Errorf("zone \"\" modifier for cell 0: delta %d, want 0", adj.LevelDelta)
 	}
 }
 
@@ -301,8 +316,8 @@ func TestDerivationAdjustLazyZone(t *testing.T) {
 
 	wide := buildModifierIndex([]*derivationModifier{
 		levelMod(modifierScope{PokemonID: 1}, 5, adjZoneA, zoneWideIn()),
-		{Type: modMovePin, Scope: modifierScope{PokemonID: 1}, Effect: modifierEffect{Slot: modSlotQuick, Move: 7},
-			Zone: adjZoneA, Status: modConfirmed, InCells: zoneWideIn(), Outside: map[s2.CellID]struct{}{}},
+		withSpread(&derivationModifier{Type: modMovePin, Scope: modifierScope{PokemonID: 1}, Effect: modifierEffect{Slot: modSlotQuick, Move: 7},
+			Zone: adjZoneA, Status: modConfirmed, InCells: zoneWideIn(), Outside: map[s2.CellID]struct{}{}}),
 	}, adjZoneWide)
 	adj := wide.lookup(1, 0, false, adjCellB, zoneOf)
 	if calls != 1 || adj.LevelDelta != 5 || adj.Quick != 7 {

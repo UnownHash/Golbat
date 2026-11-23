@@ -23,6 +23,9 @@ var (
 	cellC      = modTestCell(51.47, -0.16)
 	cellD      = modTestCell(51.56, -0.22)
 	unseenCell = modTestCell(51.40, -0.30)
+	// cellE and cellF lie under level-10 cells other than cellD's.
+	cellE = modTestCell(51.70, -0.12)
+	cellF = modTestCell(51.62, -0.40)
 )
 
 var modT0 = time.Date(2026, 11, 15, 10, 0, 0, 0, time.UTC)
@@ -135,11 +138,15 @@ func TestModifierMovePinLifecycle(t *testing.T) {
 	}
 
 	trs = nil
-	for i := range 20 {
+	for i := range 7 {
 		trs = append(trs, l.feed(modCheck(modT0.Add(2*time.Minute+time.Duration(i)*time.Second), cellA), modZone)...)
 	}
+	if len(trs) != 0 {
+		t.Fatalf("after 7 agreements: %v, want none", states(trs))
+	}
+	trs = l.feed(modCheck(modT0.Add(3*time.Minute), cellA), modZone)
 	if len(trs) != 1 || trs[0].State != modEnded || trs[0].Mod.EndReason != "agreement" {
-		t.Fatalf("after 20 agreements: %v, want ended by agreement", states(trs))
+		t.Fatalf("after 8 agreements: %v, want ended by agreement", states(trs))
 	}
 	if len(l.active()) != 0 {
 		t.Fatal("ended modifier still active")
@@ -263,7 +270,9 @@ func TestModifierAllStrongLevelNeedsTwoSpecies(t *testing.T) {
 	}
 }
 
-func TestModifierContradictionBlocksConfirm(t *testing.T) {
+// TestModifierEarlyContradictionAgesOut: one contradiction delays a
+// candidate until it leaves the 16-outcome ring, then the candidate confirms.
+func TestModifierEarlyContradictionAgesOut(t *testing.T) {
 	l := newModifierLearner(defaultModifierParams())
 	trs := feedAll(l, modZone,
 		modCheck(modT0, cellA, withCharged(494)),
@@ -285,11 +294,17 @@ func TestModifierContradictionBlocksConfirm(t *testing.T) {
 	if c := pin().Contradictions; c != 1 {
 		t.Fatalf("contradictions %d, want 1", c)
 	}
-	for i := range 20 {
-		trs = append(trs, l.feed(modCheck(modT0.Add(time.Duration(4+i)*time.Second), cellA, withCharged(494)), modZone)...)
+	// The ring holds 3 matches and the contradiction; 16 more outcomes push
+	// the contradiction out.
+	for i := range 15 {
+		trs = l.feed(modCheck(modT0.Add(time.Duration(4+i)*time.Second), cellA, withCharged(494)), modZone)
+		if len(trs) != 0 {
+			t.Fatalf("match %d with the contradiction in the ring: %v, want none", i+1, states(trs))
+		}
 	}
-	if m := pin(); m.Status != modCandidate || m.Observations != 23 {
-		t.Fatalf("status %v obs %d, want a candidate with 23", m.Status, m.Observations)
+	trs = l.feed(modCheck(modT0.Add(19*time.Second), cellA, withCharged(494)), modZone)
+	if len(trs) != 1 || trs[0].State != modConfirmed || trs[0].Mod.Observations != 19 || trs[0].Mod.Contradictions != 1 {
+		t.Fatalf("16th match after the contradiction: %v, want confirmed with 19 observations, 1 contradiction", states(trs))
 	}
 }
 
@@ -434,11 +449,11 @@ func TestModifierDeviationResetsEndCount(t *testing.T) {
 	ts := modT0
 	next := func() time.Time { ts = ts.Add(time.Second); return ts }
 	var trs []modifierTransition
-	for range 19 {
+	for range 7 {
 		trs = append(trs, l.feed(modCheck(next(), cellA), modZone)...)
 	}
 	trs = append(trs, l.feed(modCheck(next(), cellA, withCharged(494)), modZone)...)
-	for range 19 {
+	for range 7 {
 		trs = append(trs, l.feed(modCheck(next(), cellA), modZone)...)
 	}
 	if len(trs) != 0 {
@@ -446,7 +461,7 @@ func TestModifierDeviationResetsEndCount(t *testing.T) {
 	}
 	trs = l.feed(modCheck(next(), cellA), modZone)
 	if len(trs) != 1 || trs[0].State != modEnded || trs[0].Mod.EndReason != "agreement" {
-		t.Fatalf("20th agreement after the reset: %v, want ended by agreement", states(trs))
+		t.Fatalf("8th agreement after the reset: %v, want ended by agreement", states(trs))
 	}
 }
 
@@ -473,4 +488,224 @@ func TestModifierLearnerDirty(t *testing.T) {
 	check("repeated outside agreement", false, false)
 	l.feed(modCheck(modT0.Add(6*time.Second), cellA, withCharged(300)), modZone)
 	check("contradiction", true, false)
+}
+
+func modifierWith(t *testing.T, l *modifierLearner, move int32) *derivationModifier {
+	t.Helper()
+	for _, m := range l.active() {
+		if m.Effect.Move == move {
+			return m
+		}
+	}
+	t.Fatalf("pin %d not active", move)
+	return nil
+}
+
+// TestModifierSupersededPinEnds: a confirmed pin whose in-cells start
+// deviating to another move ends as contradicted instead of masking it.
+func TestModifierSupersededPinEnds(t *testing.T) {
+	l := newModifierLearner(defaultModifierParams())
+	cells := []s2.CellID{cellA, cellB, cellC}
+	confirmPin(t, l, modZone, modT0, cells...)
+	var trs []modifierTransition
+	var ended, confirmed int
+	for i := range 10 {
+		trs = l.feed(modCheck(modT0.Add(time.Duration(1+i)*time.Second), cells[i%3], withCharged(300)), modZone)
+		for _, tr := range trs {
+			switch {
+			case tr.State == modEnded && tr.Mod.Effect.Move == 494:
+				if tr.Mod.EndReason != "contradicted" {
+					t.Fatalf("494 ended %q, want contradicted", tr.Mod.EndReason)
+				}
+				ended = i + 1
+			case tr.State == modConfirmed && tr.Mod.Effect.Move == 300:
+				confirmed = i + 1
+			}
+		}
+	}
+	// 8 contradictions against the last 8 of 494's 10 matches.
+	if ended != 8 || confirmed != 10 {
+		t.Fatalf("494 ended at deviation %d, 300 confirmed at %d; want 8 and 10", ended, confirmed)
+	}
+	if m := onlyActive(t, l); m.Effect.Move != 300 || m.Status != modConfirmed {
+		t.Fatalf("active %+v, want only the confirmed 300 pin", m.Effect)
+	}
+
+	// A candidate ends the same way.
+	l = newModifierLearner(defaultModifierParams())
+	trs = feedAll(l, modZone,
+		modCheck(modT0, cellA, withCharged(494)),
+		modCheck(modT0.Add(time.Second), cellA, withCharged(494)),
+		modCheck(modT0.Add(2*time.Second), cellA, withCharged(494)),
+		modCheck(modT0.Add(3*time.Second), cellA, withCharged(300)),
+		modCheck(modT0.Add(4*time.Second), cellA, withCharged(300)))
+	if len(trs) != 1 {
+		t.Fatalf("transitions %v, want the 494 candidate only", states(trs))
+	}
+	trs = l.feed(modCheck(modT0.Add(5*time.Second), cellA, withCharged(300)), modZone)
+	if len(trs) != 2 || trs[0].State != modEnded || trs[0].Mod.EndReason != "contradicted" ||
+		trs[1].State != modCandidate || trs[1].Mod.Effect.Move != 300 {
+		t.Fatalf("third 300: %v, want 494 ended contradicted then a 300 candidate", states(trs))
+	}
+}
+
+// TestModifierDisjointVenuesStayLocal: two venues pinning different moves
+// mark each other's cells outside; neither covers the other.
+func TestModifierDisjointVenuesStayLocal(t *testing.T) {
+	l := newModifierLearner(defaultModifierParams())
+	venue1 := []s2.CellID{cellA, cellB, cellC}
+	venue2 := []s2.CellID{cellD, cellE, cellF}
+	for i := range 12 {
+		ts := modT0.Add(time.Duration(i) * 10 * time.Second)
+		l.feed(modCheck(ts, venue1[i%3], withCharged(494)), modZone)
+		l.feed(modCheck(ts.Add(time.Second), venue2[i%3], withCharged(777)), modZone)
+	}
+	p494, p777 := modifierWith(t, l, 494), modifierWith(t, l, 777)
+	if p494.Status != modConfirmed || p777.Status != modConfirmed {
+		t.Fatalf("statuses %v %v, want both confirmed", p494.Status, p777.Status)
+	}
+	if p494.ZoneWide(3) || p777.ZoneWide(3) {
+		t.Fatalf("zone-wide 494=%v 777=%v, want both local", p494.ZoneWide(3), p777.ZoneWide(3))
+	}
+	for i := range 3 {
+		if p494.Covers(modZone, venue2[i], 3) || p777.Covers(modZone, venue1[i], 3) {
+			t.Fatal("a venue's pin covers the other venue's cell")
+		}
+		if !p494.Covers(modZone, venue1[i], 3) || !p777.Covers(modZone, venue2[i], 3) {
+			t.Fatal("a venue's pin does not cover its own cell")
+		}
+	}
+}
+
+// TestModifierPreCandidateAgreementMarksOutside: an agreement before the
+// candidate forms still makes its cell outside.
+func TestModifierPreCandidateAgreementMarksOutside(t *testing.T) {
+	l := newModifierLearner(defaultModifierParams())
+	trs := feedAll(l, modZone,
+		modCheck(modT0, cellA, withCharged(494)),
+		modCheck(modT0.Add(time.Second), cellD),
+		modCheck(modT0.Add(2*time.Second), cellB, withCharged(494)),
+		modCheck(modT0.Add(3*time.Second), cellC, withCharged(494)))
+	if len(trs) != 1 || trs[0].State != modCandidate {
+		t.Fatalf("transitions %v, want a candidate", states(trs))
+	}
+	m := trs[0].Mod
+	if _, ok := m.Outside[cellD]; !ok || m.ZoneWide(3) || m.Covers(modZone, cellD, 3) {
+		t.Fatalf("outside %v zone-wide %v, want cellD outside and local", m.Outside, m.ZoneWide(3))
+	}
+
+	// A cell that deviated after agreeing is an in-cell, not outside.
+	l = newModifierLearner(defaultModifierParams())
+	trs = feedAll(l, modZone,
+		modCheck(modT0, cellA, withCharged(494)),
+		modCheck(modT0.Add(time.Second), cellD),
+		modCheck(modT0.Add(2*time.Second), cellD, withCharged(494)),
+		modCheck(modT0.Add(3*time.Second), cellB, withCharged(494)))
+	if len(trs) != 1 {
+		t.Fatalf("transitions %v, want a candidate", states(trs))
+	}
+	m = trs[0].Mod
+	if _, in := m.InCells[cellD]; !in || len(m.Outside) != 0 || !m.ZoneWide(3) {
+		t.Fatalf("in-cells %v outside %v, want cellD in, nothing outside, zone-wide", m.InCells, m.Outside)
+	}
+}
+
+func TestModifierZoneWideNeedsTwoLevel10Parents(t *testing.T) {
+	adjacent := []s2.CellID{cellA, cellA.Next(), cellA.Prev()}
+	for _, c := range adjacent[1:] {
+		if c.Parent(10) != cellA.Parent(10) {
+			t.Fatal("test cells must share a level-10 parent")
+		}
+	}
+	l := newModifierLearner(defaultModifierParams())
+	confirmPin(t, l, modZone, modT0, adjacent...)
+	if m := onlyActive(t, l); m.ZoneWide(3) || m.Covers(modZone, unseenCell, 3) {
+		t.Fatal("three adjacent cells under one level-10 cell went zone-wide")
+	}
+
+	if cellA.Parent(10) == cellB.Parent(10) {
+		t.Fatal("cellA and cellB must lie under different level-10 cells")
+	}
+	l = newModifierLearner(defaultModifierParams())
+	confirmPin(t, l, modZone, modT0, cellA, cellA.Next(), cellB)
+	if m := onlyActive(t, l); !m.ZoneWide(3) {
+		t.Fatal("in-cells under two level-10 cells with no outside cell: not zone-wide")
+	}
+}
+
+func TestModifierZoneUnknownNeverZoneWide(t *testing.T) {
+	l := newModifierLearner(defaultModifierParams())
+	confirmPin(t, l, "", modT0, cellA, cellB, cellC, cellD, cellE)
+	if m := onlyActive(t, l); m.ZoneWide(3) || m.Covers("", unseenCell, 3) {
+		t.Fatal("a modifier in the unknown zone went zone-wide")
+	}
+}
+
+// TestModifierNoiseNeverConfirmsUnexplained: scattered IV mismatches, one
+// per five agreements in the same cells, never confirm unexplained.
+func TestModifierNoiseNeverConfirmsUnexplained(t *testing.T) {
+	l := newModifierLearner(defaultModifierParams())
+	cells := make([]s2.CellID, 10)
+	for i := range cells {
+		cells[i] = modTestCell(51.40+0.02*float64(i), -0.20+0.01*float64(i))
+	}
+	ts := modT0
+	next := func() time.Time { ts = ts.Add(2 * time.Second); return ts }
+	for k := range 60 {
+		var trs []modifierTransition
+		for j := range 3 {
+			trs = append(trs, l.feed(modCheck(next(), cells[(3*k+j)%10], withIVsDisagree), modZone)...)
+		}
+		for j := range 15 {
+			trs = append(trs, l.feed(modCheck(next(), cells[(k+j)%10]), modZone)...)
+		}
+		for _, tr := range trs {
+			if tr.State == modConfirmed {
+				t.Fatalf("round %d: noise confirmed %v", k, tr.Mod.Type)
+			}
+		}
+	}
+}
+
+// TestModifierOutOfCellDeviationKeepsEndCount: a matching deviation with no
+// cell is not an in-cell match and does not reset the agreement count.
+func TestModifierOutOfCellDeviationKeepsEndCount(t *testing.T) {
+	l := newModifierLearner(defaultModifierParams())
+	confirmPin(t, l, modZone, modT0, cellA)
+	ts := modT0
+	next := func() time.Time { ts = ts.Add(time.Second); return ts }
+	var trs []modifierTransition
+	for range 4 {
+		trs = append(trs, l.feed(modCheck(next(), cellA), modZone)...)
+	}
+	trs = append(trs, l.feed(modCheck(next(), 0, withCharged(494)), modZone)...)
+	for range 3 {
+		trs = append(trs, l.feed(modCheck(next(), cellA), modZone)...)
+	}
+	if len(trs) != 0 {
+		t.Fatalf("transitions %v, want none", states(trs))
+	}
+	trs = l.feed(modCheck(next(), cellA), modZone)
+	if len(trs) != 1 || trs[0].State != modEnded || trs[0].Mod.EndReason != "agreement" {
+		t.Fatalf("8th in-cell agreement: %v, want ended by agreement", states(trs))
+	}
+}
+
+// TestModifierPinEqualAgreementNeutral: a check whose derived move is the
+// pinned move agrees with both: it neither marks outside nor ends.
+func TestModifierPinEqualAgreementNeutral(t *testing.T) {
+	l := newModifierLearner(defaultModifierParams())
+	confirmPin(t, l, modZone, modT0, cellA, cellB, cellC)
+	pinEqual := func(ev *modifierEvent) { ev.ObsCharged = 494 }
+	var trs []modifierTransition
+	trs = append(trs, l.feed(modCheck(modT0.Add(time.Second), cellD, pinEqual), modZone)...)
+	for i := range 10 {
+		trs = append(trs, l.feed(modCheck(modT0.Add(time.Duration(2+i)*time.Second), cellA, pinEqual), modZone)...)
+	}
+	if len(trs) != 0 {
+		t.Fatalf("transitions %v, want none", states(trs))
+	}
+	if m := onlyActive(t, l); len(m.Outside) != 0 || !m.ZoneWide(3) {
+		t.Fatalf("outside %v, want none and still zone-wide", m.Outside)
+	}
 }
