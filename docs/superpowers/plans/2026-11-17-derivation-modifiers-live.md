@@ -6,7 +6,7 @@
 
 **Architecture:** A pure, single-goroutine state machine (`modifierLearner`) consumes a compact, pointer-free `modifierEvent` (~56 bytes) built from the `deriveEventCheck` the events log already builds (encounter checks and, only for scopes with an active modifier, first sightings), each tagged with its zone and level-14 cell. Active modifiers are published as an immutable index behind an `atomic.Pointer`; the derive path looks a record up lock-free (species key first, cell and zone only on a hit) and adjusts the draw. A Huma endpoint lists active modifiers.
 
-**Tech Stack:** Go 1.26 (`-tags go_json`), `github.com/golang/geo/s2`, `golbat/tz`, `xsync`, Huma.
+**Tech Stack:** Go 1.27 (`-tags go_json`), `github.com/golang/geo/s2`, `golbat/tz`, `xsync`, Huma.
 
 **Spec:** `docs/design/2026-11-17-derivation-modifiers-live-design.md` (read with `docs/design/2026-11-15-derivation-event-modifiers-design.md` and `tools/eventreplay.py`, whose rules this ports).
 
@@ -25,7 +25,7 @@
   - A first sighting is sent only when its scope (species/form/strong, or any strong when an all-strong modifier is active) is in the index's active-scope set.
   - The derive path resolves a zone (`tz.SearchTimezone`) only when a matching confirmed modifier is zone-wide; local modifiers are matched by cell alone.
   - The learner keeps its own plain `map[s2.CellID]uint16` (index into a zone-name table); it shares no cache with the decode path.
-- Build/test: `go test -tags go_json ./...`; lint `make lint` (via Docker `golangci/golangci-lint:latest` and `golang:1.26` if not installed).
+- Build/test: `go test -tags go_json ./...`; lint `make lint` (via Docker `golangci/golangci-lint:latest` and `golang:1.27` if not installed).
 
 ## Review Focus
 
