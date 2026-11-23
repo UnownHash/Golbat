@@ -144,7 +144,7 @@ func GetApiDerivationModifiers(now time.Time) *ApiDerivationModifiers {
 		}
 		out.Modifiers = append(out.Modifiers, am)
 	}
-	slices.SortFunc(out.Modifiers, func(a, b ApiDerivationModifier) int { 
+	slices.SortFunc(out.Modifiers, func(a, b ApiDerivationModifier) int {
 		return cmp.Or(strings.Compare(a.ID, b.ID), strings.Compare(a.Region.Zone, b.Region.Zone))
 	})
 	return out
