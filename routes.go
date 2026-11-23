@@ -358,16 +358,7 @@ func Raw(c *gin.Context) {
 		return
 	}
 
-	// Process each proto in a packet in sequence, but in a go-routine
-	go func() {
-		release, ok := acquireRawProcessingSlot()
-		if !ok {
-			// Parked queue over its cap during a stall — shed rather than
-			// pin yet another decoded payload in memory (already logged).
-			return
-		}
-		defer release()
-
+	if !submitRaw(len(body), func() {
 		timeout := 5 * time.Second
 		if config.Config.Tuning.ExtendedTimeout {
 			timeout = 30 * time.Second
@@ -422,7 +413,12 @@ func Raw(c *gin.Context) {
 			decodePushGateway(ctx, entry.MessageType, entry.Payload)
 			cancel()
 		}
-	}()
+	}) {
+		statsCollector.IncRawRequests("error", "overload")
+		w.Header().Set("Retry-After", "1")
+		c.AbortWithStatus(http.StatusTooManyRequests)
+		return
+	}
 
 	if latTarget != 0 && lonTarget != 0 && uuid != "" {
 		UpdateDeviceLocation(uuid, latTarget, lonTarget, scanContext)

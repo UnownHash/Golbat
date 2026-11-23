@@ -260,15 +260,17 @@ the account name is `Pogodroid`, the level is 30, the first non-zero
 - 201 Created: accepted; processing happens asynchronously.
 - 401 Unauthorized: `raw_bearer` is set and the `Authorization` header is not `Bearer <raw_bearer>`.
 - 422 Unprocessable Entity: the body could not be decoded (empty body).
+- 429 Too Many Requests: the request was not queued. The response includes `Retry-After: 1`.
 
 **Notes:**
 - The body is read up to 5 MiB; a larger body is cut off and fails to decode.
 - Each proto gets its own processing timeout: 5 s, or 30 s with
   `tuning.extended_timeout`.
-- Processing concurrency is bounded (`tuning.raw_processing_concurrency`,
-  `tuning.raw_processing_queue_factor`). Under overload an accepted request
-  can be shed after the 201; shed requests are counted in
-  `golbat_raw_packets_shed_total`.
+- HTTP and gRPC share a decoder pool. Pending requests are limited to
+  `raw_processing_concurrency × raw_processing_queue_factor` and a combined
+  64 MiB of HTTP bodies or serialized protobuf messages. Either limit can
+  reject a request. The `golbat_raw_packets_shed_total` counter records
+  rejections. Setting `raw_processing_concurrency = -1` bypasses both limits.
 
 ### gRPC raw ingest
 
@@ -292,7 +294,8 @@ When `raw_bearer` is set, the `authorization` metadata value must equal it
 exactly (no `Bearer ` prefix). A failed check is not a gRPC error: the call
 returns OK with `message: "Incorrect authorisation received"` and the data is
 dropped. A successful call returns `message: "Processed"`; processing is
-asynchronous, as for `/raw`.
+asynchronous, as for `/raw`. If the queue is full, the RPC returns
+`RESOURCE_EXHAUSTED`. The sender can retry with backoff.
 
 ---
 

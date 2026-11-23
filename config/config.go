@@ -64,6 +64,7 @@ type configDefinition struct {
 	Tuning         tuning         `koanf:"tuning"`
 	Weather        weather        `koanf:"weather"`
 	ScanRules      []scanRule     `koanf:"scan_rules"`
+	Biomes         biomeConfig    `koanf:"biomes"`
 	StatsIntervals statsIntervals `koanf:"stats_intervals"`
 }
 
@@ -78,6 +79,10 @@ func (configDefinition configDefinition) GetWebhooks() []Webhook {
 
 func (configDefinition configDefinition) GetPrometheus() Prometheus {
 	return configDefinition.Prometheus
+}
+
+type biomeConfig struct {
+	Enabled bool `koanf:"enabled"`
 }
 
 type koji struct {
@@ -174,7 +179,7 @@ type tuning struct {
 	WriteBehindBatchTimeoutMs      int     `koanf:"write_behind_batch_timeout"`  // max wait for batch in ms, default: 100
 	S2CellLookup                   bool    `koanf:"s2_cell_lookup"`              // Pre-compute S2 cell lookup for faster geofence matching. Trades memory (~60x geofence file size) for ~7x faster lookups, default: false
 	RawProcessingConcurrency       int     `koanf:"raw_processing_concurrency"`  // max concurrent raw-proto processing goroutines; 0 = auto (4x CPUs, capped at 96), -1 = unlimited
-	RawProcessingQueueFactor       int     `koanf:"raw_processing_queue_factor"` // parked decode queue cap, as a multiple of the concurrency limit; 0 = default (32). Sized to ride out brief DB stalls without shedding.
+	RawProcessingQueueFactor       int     `koanf:"raw_processing_queue_factor"` // pending requests per decoder, default: 32
 	SlowDbQueryMs                  int     `koanf:"slow_db_query_ms"`            // log [DB_SLOW] for entity queries and write-behind batch flushes slower than this (ms); 0 = default (1000), -1 = disabled
 	GoGCPercent                    int     `koanf:"gogc_percent"`                // runtime GC target percent (Go default 100). Higher = fewer GC cycles, more peak heap: cost ~1/(1+n/100). Large-RAM instances with big live heaps can win 10%+ CPU at 300-400. 0 = leave Go default.
 	GoMemLimitMiB                  int     `koanf:"go_mem_limit_mib"`            // runtime soft memory limit (GOMEMLIMIT), MiB. 0 = off.

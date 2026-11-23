@@ -405,6 +405,7 @@ func decodeEncounter(ctx context.Context, sDec []byte, username string, timestam
 		return res
 	}
 
+	decoder.ObserveBiomeEncounter(decodedEncounterInfo, timestampMs)
 	statsCollector.IncDecodeEncounter("ok", "")
 	return decoder.UpdatePokemonRecordWithEncounterProto(ctx, dbDetails, decodedEncounterInfo, username, timestampMs)
 }
@@ -587,9 +588,10 @@ func appendSnapshotNearbyPokemon(dst []decoder.RawNearbyPokemonData, gmo *pogo.G
 func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder.ScanParameters) string {
 	decodedGmo := &pogo.GetMapObjectsOutProto{}
 
-	if err := unmarshalClientProto(protoData.Data, decodedGmo); err != nil {
+	parseErr := unmarshalClientProto(protoData.Data, decodedGmo)
+	if parseErr != nil {
 		statsCollector.IncDecodeGMO("error", "parse")
-		log.Errorf("Failed to parse %s", err)
+		log.Errorf("Failed to parse %s", parseErr)
 	}
 
 	if decodedGmo.Status != pogo.GetMapObjectsOutProto_SUCCESS {
@@ -672,6 +674,9 @@ func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder
 
 	if scanParameters.ProcessGyms || scanParameters.ProcessPokestops {
 		decoder.UpdateFortBatch(ctx, dbDetails, scanParameters, newForts)
+	}
+	if parseErr == nil {
+		decoder.ObserveBiomeWildBatch(scanParameters, newWildPokemon, decodedGmo.ClientWeather, protoData.TimestampMs)
 	}
 	var weatherUpdates []decoder.WeatherUpdate
 	if scanParameters.ProcessWeather {

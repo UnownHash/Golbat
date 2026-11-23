@@ -12,30 +12,67 @@ import (
 	"golbat/util"
 )
 
-// rawSlotWaitWarning is the parked-time threshold above which a raw
-// processing goroutine logs how long it waited for a semaphore slot.
+// Report queue delays above this threshold.
 const rawSlotWaitWarning = time.Second
 
-// defaultRawQueueFactor bounds how many goroutines may park waiting for a
-// slot (factor × the concurrency limit; tuning.raw_processing_queue_factor
-// overrides). Beyond that the packet is shed: the ingest endpoints have
-// already replied success, so each parked goroutine pins its decoded
-// payload in memory — during a sustained stall an unbounded queue turns
-// into an OOM. The default rides out a ~2s database micro-stall at high
-// ingest rates; sheds should only happen during genuine sustained overload.
+// Limit both the number of pending requests and their aggregate payload size.
 const defaultRawQueueFactor = 32
+const rawQueueBytes = 64 << 20
 
-// rawQueueCap is the resolved parked-goroutine cap (0 = unlimited mode).
-var rawQueueCap int64
+type rawJob struct {
+	run   func()
+	bytes int64
+	at    time.Time
+}
 
-// rawProcessingSem bounds concurrent raw-proto processing goroutines
-// (HTTP /raw and gRPC). nil means unlimited. Excess submissions park here
-// instead of piling into entity-lock convoys during a stall; ingestion
-// endpoints still respond immediately.
-var rawProcessingSem chan struct{}
+type rawQueue struct {
+	jobs  chan rawJob
+	bytes atomic.Int64
+}
 
-// rawProcessingWaiting counts goroutines parked on rawProcessingSem.
-var rawProcessingWaiting atomic.Int64
+var rawProcessingQueue *rawQueue
+
+func newRawQueue(workers, capacity int) *rawQueue {
+	q := &rawQueue{jobs: make(chan rawJob, capacity)}
+	for range workers {
+		go func() {
+			for job := range q.jobs {
+				q.bytes.Add(-job.bytes)
+				if waited := time.Since(job.at); waited > rawSlotWaitWarning {
+					reportSlowSlotWait(waited, workers)
+				}
+				job.run()
+			}
+		}()
+	}
+	return q
+}
+
+func submitRaw(size int, run func()) bool {
+	q := rawProcessingQueue
+	if q == nil {
+		go run()
+		return true
+	}
+	n := int64(size)
+	for used := q.bytes.Load(); n <= rawQueueBytes-used; used = q.bytes.Load() {
+		if !q.bytes.CompareAndSwap(used, used+n) {
+			continue
+		}
+		select {
+		case q.jobs <- rawJob{run: run, bytes: n, at: time.Now()}:
+			return true
+		default:
+			q.bytes.Add(-n)
+		}
+		break
+	}
+	statsCollector.IncRawPacketsShed()
+	rawShedDrops.Report(func(count int64) {
+		log.Warnf("[RAW_LIMITER] rejected %d requests at admission (%d queued, %d queued payload bytes)", count, len(q.jobs), q.bytes.Load())
+	})
+	return false
+}
 
 // Shed logging is aggregated via util.DropReporter: during a sustained
 // shed storm one line per dropped packet is hundreds of log lines a
@@ -65,62 +102,29 @@ func initRawProcessingLimiter() {
 	n := config.Config.Tuning.RawProcessingConcurrency
 	switch {
 	case n < 0:
-		rawProcessingSem = nil
+		rawProcessingQueue = nil
 		return
 	case n == 0:
 		n = min(4*runtime.NumCPU(), 96)
 	}
-	rawProcessingSem = make(chan struct{}, n)
 
 	factor := config.Config.Tuning.RawProcessingQueueFactor
 	if factor <= 0 {
 		factor = defaultRawQueueFactor
 	}
-	rawQueueCap = int64(factor * n)
+	q := newRawQueue(n, factor*n)
+	rawProcessingQueue = q
 
-	// Publish the parked-queue depth every 10s so dashboards can see
+	// Publish queue depth every 10s so dashboards can see
 	// decode backpressure building before sheds start.
 	go func() {
 		ticker := time.NewTicker(10 * time.Second)
 		for range ticker.C {
 			// statsCollector is never nil (see its doc comment) — no guard
 			// needed.
-			statsCollector.SetRawProcessingWaiting(float64(rawProcessingWaiting.Load()))
+			statsCollector.SetRawProcessingWaiting(float64(len(q.jobs)))
 		}
 	}()
-}
-
-// acquireRawProcessingSlot blocks until a processing slot is free and
-// returns (release, true); the caller must call release exactly once. If
-// the parked queue already exceeds rawQueueFactor× the limit it returns
-// (nil, false) and the caller must drop the packet.
-func acquireRawProcessingSlot() (func(), bool) {
-	sem := rawProcessingSem
-	if sem == nil {
-		return func() {}, true
-	}
-	select {
-	case sem <- struct{}{}:
-	default:
-		// Saturated — park (bounded), and surface long waits so operators
-		// can see backpressure instead of inferring it from throughput.
-		if waiting := rawProcessingWaiting.Add(1); waiting > rawQueueCap {
-			rawProcessingWaiting.Add(-1)
-			statsCollector.IncRawPacketsShed()
-			rawShedDrops.Report(func(dropped int64) {
-				log.Warnf("[RAW_LIMITER] shed %d packets in the last second (%d goroutines waiting for %d slots)",
-					dropped, waiting-1, cap(sem))
-			})
-			return nil, false
-		}
-		start := time.Now()
-		sem <- struct{}{}
-		rawProcessingWaiting.Add(-1)
-		if wait := time.Since(start); wait > rawSlotWaitWarning {
-			reportSlowSlotWait(wait, cap(sem))
-		}
-	}
-	return func() { <-sem }, true
 }
 
 func reportSlowSlotWait(wait time.Duration, limit int) {
