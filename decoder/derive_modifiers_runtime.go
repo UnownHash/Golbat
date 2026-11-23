@@ -19,9 +19,12 @@ import (
 
 // The derivation modifier learner's runtime (design §6): one goroutine owns
 // the modifierLearner, fed by a channel from the encounter check and, while
-// a scope has an active modifier, its first sightings. After every feed or
-// sweep that changed a modifier it logs the transitions and republishes
-// derivationModifierIndex and the API snapshot. State is in memory only.
+// a scope has an active modifier, its first sightings. It logs every
+// transition and republishes derivationModifierIndex and the API snapshot
+// after a transition or a change to a confirmed modifier's coverage at
+// once, and after an evidence-only change (observations, contradictions,
+// a candidate's cells) at most once per deriveModifiersEvidenceInterval.
+// State is in memory only.
 
 // deriveModifiersQueueSize is the learner's channel capacity: 16384
 // pointer-free events, ~1 MB, never scanned by the GC.
@@ -31,6 +34,10 @@ const deriveModifiersQueueSize = 16384
 // modifiers and prunes idle tracks when no event arrives.
 const deriveModifiersSweepInterval = time.Minute
 
+// deriveModifiersEvidenceInterval is the least time between two
+// republishes for evidence-only changes, which can come with every event.
+const deriveModifiersEvidenceInterval = time.Second
+
 // modifierRuntime is the learner goroutine's state. Everything but the
 // channel and the submit guard is owned by run (or a test calling handle).
 type modifierRuntime struct {
@@ -39,6 +46,12 @@ type modifierRuntime struct {
 	// sweepInterval is run's sweep period (deriveModifiersSweepInterval;
 	// tests shorten it before start).
 	sweepInterval time.Duration
+	// clock times evidence-only republishes (time.Now; tests replace it).
+	clock func() time.Time
+	// evidencePending: an evidence-only change is not yet published;
+	// lastPublish is when the index and snapshot were last rebuilt.
+	evidencePending bool
+	lastPublish     time.Time
 
 	events chan modifierEvent
 	// submitMu orders submit against shutdown, as in deriveEventsWriter.
@@ -48,6 +61,8 @@ type modifierRuntime struct {
 
 	// zoneOf maps a level-14 cell to its index in zoneNames; zoneNames[0]
 	// is "" (unknown). zoneIndex is the reverse, so cells share one name.
+	// Never pruned: it is bounded by the level-14 cells scanned (~2 bytes of
+	// value per entry).
 	zoneOf    map[s2.CellID]uint16
 	zoneNames []string
 	zoneIndex map[string]uint16
@@ -58,6 +73,7 @@ func newModifierRuntime(p modifierParams, queueSize int) *modifierRuntime {
 		learner:       newModifierLearner(p),
 		zoneWideCells: p.ZoneWideCells,
 		sweepInterval: deriveModifiersSweepInterval,
+		clock:         time.Now,
 		events:        make(chan modifierEvent, queueSize),
 		zoneOf:        make(map[s2.CellID]uint16),
 		zoneNames:     []string{""},
@@ -216,15 +232,23 @@ func (r *modifierRuntime) zone(cell s2.CellID) string {
 	return name
 }
 
-// publish logs trs and, when there are any, republishes the index and the
-// snapshot from the learner's active modifiers.
+// publish logs trs and republishes the index and the snapshot from the
+// learner's active modifiers: at once after a transition or a coverage
+// change, else, for an evidence-only change (now or earlier, unpublished),
+// once deriveModifiersEvidenceInterval has passed since the last publish.
+// With nothing changed it returns without reading the clock.
 func (r *modifierRuntime) publish(trs []modifierTransition) {
-	if len(trs) == 0 {
-		return
-	}
 	for _, tr := range trs {
 		log.Info(formatModifierTransition(tr, r.zoneWideCells))
 	}
+	dirty, regionChanged := r.learner.takeDirty()
+	if len(trs) == 0 && !regionChanged {
+		r.evidencePending = r.evidencePending || dirty
+		if !r.evidencePending || r.clock().Sub(r.lastPublish) < deriveModifiersEvidenceInterval {
+			return
+		}
+	}
+	r.evidencePending, r.lastPublish = false, r.clock()
 	active := r.learner.active()
 	derivationModifierIndex.Store(buildModifierIndex(active, r.zoneWideCells))
 	if len(active) == 0 {

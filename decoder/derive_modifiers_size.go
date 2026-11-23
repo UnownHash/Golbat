@@ -124,15 +124,23 @@ func (e *sizeEvidence) try(cls uint8, roll float64, cuts []sizeCut) (next sizeEv
 	return next, true, false
 }
 
-// fill sets dst to the boundaries whose interval excludes their base cut.
-func (e *sizeEvidence) fill(dst map[string]sizeBoundary, cuts []sizeCut) {
-	clear(dst)
+// fill sets dst to the boundaries whose interval excludes their base cut
+// and reports whether that changed dst. dst holds only cuts' names.
+func (e *sizeEvidence) fill(dst map[string]sizeBoundary, cuts []sizeCut) bool {
+	changed := false
 	for _, c := range cuts {
 		b := e.boundary(c)
+		old, had := dst[c.name]
 		if !b.empty() && ((b.HasLo && b.Lo >= c.at) || (b.HasHi && b.Hi < c.at)) {
-			dst[c.name] = b
+			if !had || old != b {
+				dst[c.name], changed = b, true
+			}
+		} else if had {
+			delete(dst, c.name)
+			changed = true
 		}
 	}
+	return changed
 }
 
 // seed resets e to the rolls of the pending deviations with a cell, in
@@ -199,12 +207,15 @@ func (l *modifierLearner) sizeDeviation(ev modifierEvent, species modifierScope,
 		if refused {
 			if _, in := mod.InCells[ev.Cell]; in && ev.Cell != 0 {
 				mod.Contradictions++
+				l.changed(mod, false)
 			}
 			return out
 		}
 		if changed && ev.Cell != 0 {
 			*t.size = next
-			t.size.fill(mod.Boundaries, cuts)
+			if t.size.fill(mod.Boundaries, cuts) {
+				l.changed(mod, true)
+			}
 		}
 	}
 	return l.match(t, ev, now, out)
@@ -225,7 +236,7 @@ func (l *modifierLearner) sizeAgreement(t *modTrack, ev modifierEvent, now time.
 		if in {
 			return append(out, l.end(t, now, "contrary"))
 		}
-		mod.Outside[ev.Cell] = struct{}{}
+		l.markOutside(mod, ev.Cell)
 		return out
 	}
 	if !in {
@@ -233,7 +244,9 @@ func (l *modifierLearner) sizeAgreement(t *modTrack, ev modifierEvent, now time.
 	}
 	if next, changed, _ := t.size.try(ev.ObsSize, ev.SizeRoll, cuts); changed {
 		*t.size = next
-		t.size.fill(mod.Boundaries, cuts)
+		if t.size.fill(mod.Boundaries, cuts) {
+			l.changed(mod, true)
+		}
 	}
 	return out
 }

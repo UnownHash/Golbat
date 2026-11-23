@@ -105,7 +105,13 @@ retroactive correction, no webhook re-send).
   and scanned by the GC). A first sighting is sent only when its scope has
   an active modifier: outside events there is no sighting traffic at all.
 - Active modifiers are published as an immutable index behind an atomic
-  pointer (nil when none, so the normal derive costs one atomic load); the
+  pointer (nil when none, so the normal derive costs one atomic load). The
+  worker republishes it, with the API snapshot, on every transition and on
+  every change to a confirmed modifier's coverage (in-cells added, zone-wide
+  lost or regained, size boundaries moved) at once; evidence-only changes
+  (observations, contradictions, a candidate's cells) at most once a second.
+  The learner flags such changes itself, so an event that changes nothing
+  rebuilds nothing. The
   derive path does a lock-free lookup by (species, form, strong) plus the
   all-strong key, and only on a hit computes the level-14 cell (local:
   in-cell membership) or, for a zone-wide modifier, the zone. The decode

@@ -392,3 +392,85 @@ func TestModifierEventCompact(t *testing.T) {
 	}
 	_ = sink
 }
+
+func TestModifierZoneWideDemotedByOutsideAgreement(t *testing.T) {
+	l := newModifierLearner(defaultModifierParams())
+	confirmPin(t, l, modZone, modT0, cellA, cellB, cellC)
+	if !onlyActive(t, l).ZoneWide(3) {
+		t.Fatal("not zone-wide after three in-cells")
+	}
+	if trs := l.feed(modCheck(modT0.Add(time.Second), cellD), modZone); len(trs) != 0 {
+		t.Fatalf("outside agreement: %v, want no transition", states(trs))
+	}
+	m := onlyActive(t, l)
+	if m.ZoneWide(3) {
+		t.Fatal("still zone-wide after an agreement in cell D")
+	}
+	if _, ok := m.Outside[cellD]; !ok {
+		t.Fatalf("outside %v, want cellD", m.Outside)
+	}
+	if !m.Covers(modZone, cellA, 3) || m.Covers(modZone, cellD, 3) || m.Covers(modZone, unseenCell, 3) {
+		t.Fatal("demoted modifier must cover its in-cells only")
+	}
+}
+
+func TestModifierOutsideCellRemovedByDeviation(t *testing.T) {
+	l := newModifierLearner(defaultModifierParams())
+	confirmPin(t, l, modZone, modT0, cellA, cellB, cellC)
+	l.feed(modCheck(modT0.Add(time.Second), cellD), modZone)
+	l.feed(modCheck(modT0.Add(2*time.Second), cellD, withCharged(494)), modZone)
+	m := onlyActive(t, l)
+	if _, out := m.Outside[cellD]; out || len(m.Outside) != 0 {
+		t.Fatalf("outside %v, want cellD removed", m.Outside)
+	}
+	if _, in := m.InCells[cellD]; !in || !m.ZoneWide(3) {
+		t.Fatalf("in-cells %d zone-wide %v, want cellD an in-cell and zone-wide again", len(m.InCells), m.ZoneWide(3))
+	}
+}
+
+func TestModifierDeviationResetsEndCount(t *testing.T) {
+	l := newModifierLearner(defaultModifierParams())
+	confirmPin(t, l, modZone, modT0, cellA)
+	ts := modT0
+	next := func() time.Time { ts = ts.Add(time.Second); return ts }
+	var trs []modifierTransition
+	for range 19 {
+		trs = append(trs, l.feed(modCheck(next(), cellA), modZone)...)
+	}
+	trs = append(trs, l.feed(modCheck(next(), cellA, withCharged(494)), modZone)...)
+	for range 19 {
+		trs = append(trs, l.feed(modCheck(next(), cellA), modZone)...)
+	}
+	if len(trs) != 0 {
+		t.Fatalf("transitions %v, want none: the deviation reset the end count", states(trs))
+	}
+	trs = l.feed(modCheck(next(), cellA), modZone)
+	if len(trs) != 1 || trs[0].State != modEnded || trs[0].Mod.EndReason != "agreement" {
+		t.Fatalf("20th agreement after the reset: %v, want ended by agreement", states(trs))
+	}
+}
+
+func TestModifierLearnerDirty(t *testing.T) {
+	l := newModifierLearner(defaultModifierParams())
+	confirmPin(t, l, modZone, modT0, cellA)
+	l.takeDirty()
+	check := func(what string, wantDirty, wantRegion bool) {
+		t.Helper()
+		dirty, region := l.takeDirty()
+		if dirty != wantDirty || region != wantRegion {
+			t.Fatalf("%s: dirty=%v region=%v, want %v %v", what, dirty, region, wantDirty, wantRegion)
+		}
+	}
+	l.feed(modCheck(modT0.Add(time.Second), cellA), modZone)
+	check("in-cell agreement", false, false)
+	l.feed(modCheck(modT0.Add(2*time.Second), cellA, withCharged(494)), modZone)
+	check("deviation in an in-cell", true, false)
+	l.feed(modCheck(modT0.Add(3*time.Second), cellB, withCharged(494)), modZone)
+	check("deviation in a new cell", true, true)
+	l.feed(modCheck(modT0.Add(4*time.Second), cellD), modZone)
+	check("outside agreement of a local modifier", true, false)
+	l.feed(modCheck(modT0.Add(5*time.Second), cellD), modZone)
+	check("repeated outside agreement", false, false)
+	l.feed(modCheck(modT0.Add(6*time.Second), cellA, withCharged(300)), modZone)
+	check("contradiction", true, false)
+}

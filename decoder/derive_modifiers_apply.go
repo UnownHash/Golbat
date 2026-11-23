@@ -168,7 +168,9 @@ func (idx *modifierIndex) lookup(pokemonID, form int32, strong bool, cell s2.Cel
 }
 
 // modifierZoneCache is the decode path's cell → zone cache, filled only by
-// zone-wide matches (the learner keeps its own).
+// zone-wide matches (the learner keeps its own). Never pruned: it holds only
+// the cells where an affected species was derived under a zone-wide
+// modifier, bounded by the scanned area.
 var modifierZoneCache = xsync.NewMap[s2.CellID, string]()
 
 // modifierZoneOf is the IANA zone at cell's centre, "" when unknown or for

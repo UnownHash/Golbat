@@ -285,6 +285,10 @@ type modifierLearner struct {
 	byScope      map[modScopeKey][]*modTrack
 	activeTracks []*modTrack // tracks with a modifier
 	nextPrune    int64
+	// dirty: an active modifier's evidence or region changed without a
+	// transition since the last takeDirty; regionDirty: such a change on a
+	// confirmed modifier changed what the index's lookup returns.
+	dirty, regionDirty bool
 }
 
 func newModifierLearner(p modifierParams) *modifierLearner {
@@ -335,6 +339,37 @@ func (l *modifierLearner) active() []*derivationModifier {
 
 func (l *modifierLearner) trackCount() int { return len(l.tracks) }
 
+// changed records a change to active modifier m that is not a transition;
+// coverage when it changes what m's index entry matches (its in-cells, its
+// zone-wide flag or its size boundaries).
+func (l *modifierLearner) changed(m *derivationModifier, coverage bool) {
+	l.dirty = true
+	if coverage && m.Status == modConfirmed {
+		l.regionDirty = true
+	}
+}
+
+// takeDirty reports and clears the changes recorded since the last call:
+// dirty when an active modifier changed without a transition, regionChanged
+// when that changed a confirmed modifier's coverage (the published index is
+// stale, not just the snapshot's evidence).
+func (l *modifierLearner) takeDirty() (dirty, regionChanged bool) {
+	dirty, regionChanged = l.dirty, l.regionDirty
+	l.dirty, l.regionDirty = false, false
+	return dirty, regionChanged
+}
+
+// markOutside makes cell an outside cell of m. Adding one ends zone-wide
+// coverage, so the change is a coverage change exactly when m was zone-wide.
+func (l *modifierLearner) markOutside(m *derivationModifier, cell s2.CellID) {
+	if _, ok := m.Outside[cell]; ok {
+		return
+	}
+	wasZoneWide := m.ZoneWide(l.p.ZoneWideCells)
+	m.Outside[cell] = struct{}{}
+	l.changed(m, wasZoneWide)
+}
+
 // observe applies a check or sighting to the existing tracks of one scope:
 // it marks active modifiers seen, and an agreement on a track's dimension
 // gates its pending deviations or counts toward its end.
@@ -361,7 +396,7 @@ func (l *modifierLearner) observe(sk modScopeKey, ev modifierEvent, now time.Tim
 			continue
 		}
 		if _, in := t.mod.InCells[ev.Cell]; !in {
-			t.mod.Outside[ev.Cell] = struct{}{}
+			l.markOutside(t.mod, ev.Cell)
 			continue
 		}
 		t.endOK++
@@ -437,6 +472,7 @@ func (l *modifierLearner) matchContradicting(t *modTrack, ev modifierEvent, now 
 			}
 			if _, in := o.mod.InCells[ev.Cell]; in {
 				o.mod.Contradictions++
+				l.changed(o.mod, false)
 			}
 		}
 	}
@@ -489,10 +525,15 @@ func (l *modifierLearner) match(t *modTrack, ev modifierEvent, now time.Time,
 	mod := t.mod
 	mod.Observations++
 	t.endOK = 0
+	coverage := false
 	if ev.Cell != 0 {
+		wasZoneWide := mod.ZoneWide(p.ZoneWideCells)
+		_, wasIn := mod.InCells[ev.Cell]
 		mod.InCells[ev.Cell] = struct{}{}
 		delete(mod.Outside, ev.Cell)
+		coverage = !wasIn || wasZoneWide != mod.ZoneWide(p.ZoneWideCells)
 	}
+	l.changed(mod, coverage)
 	if now.After(mod.LastSeen) {
 		mod.LastSeen = now
 	}

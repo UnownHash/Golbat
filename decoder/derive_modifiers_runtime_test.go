@@ -309,3 +309,109 @@ func TestDerivationModifiersFlushDrainsQueue(t *testing.T) {
 		t.Errorf("%d events left queued after Flush", len(r.events))
 	}
 }
+
+func modZoneOf(s2.CellID) string { return modZone }
+
+// TestDerivationModifiersRuntimeRepublishesDemotion: a pin confirmed
+// zone-wide that turns local without a transition (an agreement in another
+// cell) is republished at once: the index stops covering the zone.
+func TestDerivationModifiersRuntimeRepublishesDemotion(t *testing.T) {
+	r := newModifierRuntime(defaultModifierParams(), 64)
+	withModifierRuntime(t, r)
+	cells := []s2.CellID{cellA, cellB, cellC}
+	for i := range 10 {
+		r.handle(modCheck(modT0.Add(time.Duration(i)*time.Second), cells[i%3], withCharged(494)))
+	}
+	if adj := derivationModifierIndex.Load().lookup(959, 3272, true, cellD, modZoneOf); adj.Charged != 494 {
+		t.Fatalf("zone-wide pin: cellD adjust %+v, want charged 494", adj)
+	}
+
+	r.handle(modCheck(modT0.Add(10*time.Second), cellD))
+	idx := derivationModifierIndex.Load()
+	if adj := idx.lookup(959, 3272, true, cellD, modZoneOf); adj.Charged != 0 {
+		t.Errorf("after the outside agreement: cellD adjust %+v, want none", adj)
+	}
+	if adj := idx.lookup(959, 3272, true, unseenCell, modZoneOf); adj.Charged != 0 {
+		t.Errorf("after the outside agreement: unseen cell adjust %+v, want none", adj)
+	}
+	if adj := idx.lookup(959, 3272, true, cellA, modZoneOf); adj.Charged != 494 {
+		t.Errorf("after the outside agreement: cellA adjust %+v, want charged 494", adj)
+	}
+	snap := activeDerivationModifiers()
+	if len(snap) != 1 {
+		t.Fatalf("snapshot %d modifiers, want 1", len(snap))
+	}
+	if _, ok := snap[0].Outside[cellD]; !ok || len(snap[0].Outside) != 1 {
+		t.Errorf("snapshot outside %v, want cellD", snap[0].Outside)
+	}
+}
+
+// TestDerivationModifiersRuntimeRepublishesNewInCell: a deviation in a new
+// cell extends a local confirmed pin's index coverage at once.
+func TestDerivationModifiersRuntimeRepublishesNewInCell(t *testing.T) {
+	r := newModifierRuntime(defaultModifierParams(), 64)
+	withModifierRuntime(t, r)
+	for i := range 10 {
+		r.handle(modCheck(modT0.Add(time.Duration(i)*time.Second), cellA, withCharged(494)))
+	}
+	if adj := derivationModifierIndex.Load().lookup(959, 3272, true, cellB, modZoneOf); adj.Charged != 0 {
+		t.Fatalf("local pin: cellB adjust %+v, want none", adj)
+	}
+	r.handle(modCheck(modT0.Add(10*time.Second), cellB, withCharged(494)))
+	if adj := derivationModifierIndex.Load().lookup(959, 3272, true, cellB, modZoneOf); adj.Charged != 494 {
+		t.Fatalf("after a deviation in cellB: adjust %+v, want charged 494", adj)
+	}
+}
+
+// TestDerivationModifiersRuntimeRepublishesSizeBoundaries: a confirmed size
+// modifier's narrowed interval reaches the index at once.
+func TestDerivationModifiersRuntimeRepublishesSizeBoundaries(t *testing.T) {
+	r := newModifierRuntime(defaultModifierParams(), 64)
+	withModifierRuntime(t, r)
+	evs := []modifierEvent{
+		modCheck(modT0, cellA, withSize(0.008, 1)),
+		modCheck(modT0.Add(time.Second), cellB, withSize(0.009, 1)),
+		modCheck(modT0.Add(2*time.Second), cellC, withSize(0.011, 1)),
+		modCheck(modT0.Add(3*time.Second), cellA, withSize(0.015, 2)), // an agreement
+	}
+	for i := range 7 {
+		evs = append(evs, modCheck(modT0.Add(time.Duration(4+i)*time.Second), cellB, withSize(0.009, 1)))
+	}
+	for _, ev := range evs {
+		r.handle(ev)
+	}
+	snap := activeDerivationModifiers()
+	if len(snap) != 1 || snap[0].Status != modConfirmed {
+		t.Fatalf("snapshot %+v, want one confirmed size modifier", snap)
+	}
+	if b := derivationModifierIndex.Load().lookup(19, 0, false, cellA, modZoneOf).Size["1/2"]; b.Lo != 0.011 {
+		t.Fatalf("1/2 = %+v, want lo 0.011", b)
+	}
+	r.handle(modCheck(modT0.Add(time.Minute), cellA, withSize(0.013, 1)))
+	b := derivationModifierIndex.Load().lookup(19, 0, false, cellA, modZoneOf).Size["1/2"]
+	if b != (sizeBoundary{Lo: 0.013, Hi: 0.015, HasLo: true, HasHi: true}) {
+		t.Fatalf("after a narrowing roll: 1/2 = %+v, want [0.013, 0.015]", b)
+	}
+}
+
+// TestDerivationModifiersRuntimeEvidenceRateLimited: an evidence-only change
+// (another observation) is republished at most once per
+// deriveModifiersEvidenceInterval, and not lost in between.
+func TestDerivationModifiersRuntimeEvidenceRateLimited(t *testing.T) {
+	r := newModifierRuntime(defaultModifierParams(), 64)
+	clock := modT0
+	r.clock = func() time.Time { return clock }
+	withModifierRuntime(t, r)
+	for i := range 10 {
+		r.handle(modCheck(modT0.Add(time.Duration(i)*time.Second), cellA, withCharged(494)))
+	}
+	r.handle(modCheck(modT0.Add(10*time.Second), cellA, withCharged(494)))
+	if obs := activeDerivationModifiers()[0].Observations; obs != 10 {
+		t.Fatalf("observations %d right after the confirm, want 10 (rate-limited)", obs)
+	}
+	clock = clock.Add(deriveModifiersEvidenceInterval)
+	r.handle(modCheck(modT0.Add(11*time.Second), cellA)) // changes nothing itself
+	if obs := activeDerivationModifiers()[0].Observations; obs != 11 {
+		t.Fatalf("observations %d after the interval, want 11", obs)
+	}
+}
