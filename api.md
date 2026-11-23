@@ -233,42 +233,50 @@ with an empty `modifiers` array.
   unbounded) or `{"type":"unexplained"}` (IVs disagree, so derivation for the
   scope is suppressed; its id has no effect part).
 - `status` is `candidate` or `confirmed`; `window.end` is always null.
-- `region` is where the modifier covers a record, judged per timezone at two
-  scales:
-  - `zone_wide` (a global event): its effect is more than half of the zone's
-    last 16 located checks of the scope (neutral pin agreements aside: a
-    check whose base move is the pinned move says nothing), the record holds at least `confirm`
-    of them, its matches lie under at least two ~10 km (level-10) S2 cells,
-    and the zone is known. It turns off as soon as that fails, or when the
-    zone has had no located check of the scope for `unseen_seconds`.
-    `excluded` lists the level-14 cells (at most 16) whose latest check in that
-    record was not this effect (an agreement or another effect); they are not
-    covered. A later match readmits a cell.
-  - `cells` (a ticketed venue): the level-14 S2 cells covered after two
-    matches there with no agreement or other effect in that cell since. One
-    agreement or other effect there removes the cell at once; so does
-    `unseen_seconds` without a match there.
+- `region` is judged per timezone. Only zone-wide coverage is applied;
+  venue cells are detection evidence, listed and never applied.
+  - `zone_wide` (a global event): over the zone's last 16 located checks of
+    the scope that are no older than `unseen_seconds` (neutral pin
+    agreements aside: a check whose base move is the pinned move says
+    nothing), at least `confirm` are fresh, its effect is more than half of
+    them, its matches come from at least 8 distinct level-14 cells, two of
+    them at least 10 km apart (centre to centre), and the zone is known. A
+    scan area smaller than 10 km is never zone-wide. A confirmed zone-wide
+    modifier stays on with less (sampled encounters arrive at random): at
+    least `start` fresh checks, still a majority, matches from at least
+    `start` cells with a 10 km pair. Checks age out individually, so an
+    event that ended stops applying within `unseen_seconds`.
+  - `excluded` lists the level-14 cells a zone-wide modifier does not
+    cover: their latest check was not this effect (an agreement or another
+    effect; for size, a roll that disproves a listed boundary there). A
+    cell stays excluded for the modifier's life until a match in that cell
+    (for size, one crossing each boundary disproved there), whatever
+    happens to the 16-check record meanwhile. At most 256: one more turns
+    zone-wide off for good, which ends a confirmed modifier (`agreement`)
+    and a candidate (`unconfirmed`; fresh deviations open a new one).
+    Listed only while zone-wide.
+  - `cells` (a ticketed venue): the level-14 S2 cells with two matches and
+    no agreement or other effect in that cell since. One agreement or other
+    effect there removes the cell at once; so does `unseen_seconds` without
+    a match there. At most 1024 per modifier. Listed for detection only:
+    a modifier with venue cells alone is never applied and never confirms.
   `cells` and `excluded` are sorted tokens, empty (never null) when there are
-  none; a modifier can have both coverages. A covered venue cell is covered
-  even when the zone-wide coverage excludes it.
+  none.
 - Lifecycle: `start` matching deviations (default 3) within `window_seconds`
-  open a candidate. It is confirmed with `confirm` matches (default 10)
-  located in S2 cells while zone-wide, or with `confirm` matches inside its
-  covered venue cells (scattered noise that hits one cell twice covers it but
-  never confirms). A candidate not confirmed within `unseen_seconds` of its
-  start ends (`unconfirmed`); fresh deviations open a new one. A confirmed
-  modifier ends, and drops out of this list, when it covers nothing: reason
-  `agreement` when checks took its coverage, `contradicted` when another
-  effect took its last coverage (zone-wide lost with another effect as the
-  latest check, or its last covered venue cell), `unseen` when its coverage
-  lapsed for lack of checks or matches or its scope was not seen where it
-  covers for `unseen_seconds`. Sightings do not keep a modifier alive beyond
-  its checks. A size modifier is zone-wide only (no venue cells): its record
-  takes a deviation across a listed boundary as a match, a contrary roll (one
-  between a listed boundary's base cut and its interval that the base cut
-  classifies) as an agreement and a roll the fit refuses as another effect,
-  so it ends `agreement` when that turns zone-wide off. Ended modifiers appear only in the `[DERIVE_MODIFIER]` log, with the end
-  reason.
+  open a candidate. It is confirmed when it is zone-wide and has had
+  `confirm` located matches (default 10). A candidate not confirmed within
+  2 × `unseen_seconds` of its start ends (`unconfirmed`); fresh deviations
+  open a new one. A confirmed modifier ends, and drops out of this list, as
+  soon as it is not zone-wide: reason `unseen` when too few fresh checks are
+  left (or its scope was not seen where it covers for `unseen_seconds`),
+  `contradicted` when the latest fresh check showed another effect, else
+  `agreement`. Sightings do not keep a modifier alive beyond its checks. A
+  size modifier has no venue cells: its record takes a deviation across a
+  listed boundary as a match, a contrary roll (one between a listed
+  boundary's base cut and its interval that the base cut classifies) as an
+  agreement and a roll the fit refuses as another effect, and every
+  IV-agreeing located roll of the scope ages it. Ended modifiers appear only
+  in the `[DERIVE_MODIFIER]` log, with the end reason.
 - All-strong summary: when two or more strong species have an active
   (candidate or confirmed) level offset with the same delta in one zone, an
   extra entry with scope `{"strong": true}` and id
@@ -279,12 +287,12 @@ with an empty `modifiers` array.
   (`zone_wide` if one is, the union of their cells, no excluded cells). Its
   id carries the earliest member's start date, so it can change when that
   member ends.
-- `applied` is true when derivation applies the modifier: confirmed and not
-  an all-strong summary (an all-strong offset is never applied; each strong
-  species' own offset is). Where two confirmed modifiers of one type and slot
-  both cover a record they dispute the value and neither applies: two level
-  offsets leave the IVs and level underived, two pins of one slot leave that
-  move absent, two size modifiers leave size absent.
+- `applied` is true when derivation applies the modifier: confirmed,
+  zone-wide and not an all-strong summary (an all-strong offset is never
+  applied; each strong species' own offset is). Modifiers of different types
+  combine on one record; an `unexplained` one suppresses derivation for the
+  scope. A record's zone has at most one applied modifier per type and slot
+  (zone-wide needs the zone record's majority).
 
 **Status Codes:**
 - 200: OK

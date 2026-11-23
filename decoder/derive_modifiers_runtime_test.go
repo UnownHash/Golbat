@@ -383,8 +383,10 @@ func TestDerivationModifiersWorkerSweepEndsUnseen(t *testing.T) {
 func TestDerivationModifiersFlushDrainsQueue(t *testing.T) {
 	r := newModifierRuntime(defaultModifierParams(), 64)
 	withModifierRuntime(t, r)
-	for i := range 10 {
-		submitDerivationModifierEvent(modCheck(modT0.Add(time.Duration(i)*time.Second), cellA, withCharged(494)))
+	// Ten spread matches confirm a zone-wide pin: only that publishes an
+	// index (a venue-only candidate has nothing to apply or watch).
+	for i, c := range modWideCells(10) {
+		submitDerivationModifierEvent(modCheck(modT0.Add(time.Duration(i)*time.Second), c, withCharged(494)))
 	}
 	r.start() // started after queueing, so Flush finds the events still queued or in flight
 	FlushDerivationModifiers()
@@ -820,5 +822,26 @@ func TestDerivationModifiersRuntimePublishesAllStrongSummary(t *testing.T) {
 	}
 	if n := len(activeDerivationModifiers()); n != 2 {
 		t.Errorf("%d active modifiers, want the 2 species", n)
+	}
+}
+
+// The learner's cell → zone map is cleared before an insert would take it
+// past deriveZoneCacheMax; the zone names survive.
+func TestDerivationModifiersRuntimeZoneCacheCapped(t *testing.T) {
+	withZoneCacheMax(t, 3)
+	r := newModifierRuntime(defaultModifierParams(), 1)
+	for i, c := range zoneCacheCells(7) {
+		if z := r.zone(c); z != adjZoneA {
+			t.Fatalf("cell %d zone %q, want %s", i, z, adjZoneA)
+		}
+		if len(r.zoneOf) > 3 {
+			t.Fatalf("after %d cells: %d entries, want ≤ 3", i+1, len(r.zoneOf))
+		}
+		if _, ok := r.zoneOf[c]; !ok {
+			t.Fatalf("cell %d not cached", i)
+		}
+	}
+	if len(r.zoneNames) != 2 {
+		t.Errorf("zone names %v, want \"\" and %s once", r.zoneNames, adjZoneA)
 	}
 }

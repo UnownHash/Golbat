@@ -503,7 +503,7 @@ func (pokemon *Pokemon) calculateIv(a int64, d int64, s int64) {
 //
 // adj is the confirmed derivation modifiers' adjustment (modifierAdjust),
 // read once by the caller: the level delta, the pinned moves and moved size
-// cuts, and the size or move slots it withholds. A suppressing adj is the
+// cuts. A suppressing adj is the
 // caller's to honour — it must not call this.
 //
 // Moves are derived for pokemon.PokemonId/Form as they stand, which at every
@@ -544,9 +544,9 @@ func (pokemon *Pokemon) applyDerivedValues(v encounter.Draw, adj derivationAdjus
 
 // applyDerivedSize fills an absent size from the draw, reclassified with
 // adj's moved cuts when it has any; a roll inside a moved cut's interval
-// leaves size absent, as does a size adj withholds.
+// leaves size absent.
 func (pokemon *Pokemon) applyDerivedSize(v encounter.Draw, adj derivationAdjust) {
-	if pokemon.Size.Valid || adj.WithholdSize {
+	if pokemon.Size.Valid {
 		return
 	}
 	size := v.Size
@@ -564,7 +564,7 @@ func (pokemon *Pokemon) applyDerivedSize(v encounter.Draw, adj derivationAdjust)
 // identity has just changed can have its moves re-derived without its IVs
 // and level being touched — see resetDittoAttributes. A move pinned by adj
 // fills its slot when absent, as a derived one does, even when the pools do
-// not resolve; a slot adj withholds is left absent.
+// not resolve.
 func (pokemon *Pokemon) applyDerivedMoves(v encounter.Draw, adj derivationAdjust) {
 	if !config.Config.DeriveIv || hasPlayerSpecificStats(pokemon.PokemonId) {
 		return
@@ -587,8 +587,6 @@ func (pokemon *Pokemon) applyDerivedMoves(v encounter.Draw, adj derivationAdjust
 	if adj.Charged != 0 {
 		move2, ok2 = adj.Charged, true
 	}
-	// A disputed slot is left absent, not derived: base is likely wrong too.
-	ok1, ok2 = ok1 && !adj.WithholdQuick, ok2 && !adj.WithholdCharged
 	if ok1 && !pokemon.Move1.Valid {
 		pokemon.SetMove1(null.IntFrom(int64(move1)))
 	}

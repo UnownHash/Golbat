@@ -25,7 +25,7 @@ type ApiDerivationModifier struct {
 	Window   ApiModifierWindow   `json:"window"`
 	Effect   map[string]any      `json:"effect" doc:"level_offset {type, delta}, move_pin {type, slot, move} or size_cutoffs {type, boundaries: {cut: [lo, hi]}} with null for an unbounded end, or unexplained {type}"`
 	Status   string              `json:"status" doc:"candidate or confirmed"`
-	Applied  bool                `json:"applied" doc:"The derive path applies it: confirmed and not an all-strong summary"`
+	Applied  bool                `json:"applied" doc:"The derive path applies it: confirmed, zone-wide and not an all-strong summary. Venue cells alone are never applied"`
 	Evidence ApiModifierEvidence `json:"evidence"`
 	Region   ApiModifierRegion   `json:"region"`
 }
@@ -51,13 +51,14 @@ type ApiModifierEvidence struct {
 	Contradictions int `json:"contradictions"`
 }
 
-// ApiModifierRegion is where the modifier applies (design §8): its zone less
-// the excluded cells when zone-wide, and its covered venue cells.
+// ApiModifierRegion is where the modifier was seen and applies (design §9):
+// an applied modifier covers its zone less the excluded cells; venue cells
+// are detection evidence, listed and never applied.
 type ApiModifierRegion struct {
 	Zone     string   `json:"zone" doc:"IANA timezone"`
-	ZoneWide bool     `json:"zone_wide" doc:"Covers the whole zone except the excluded cells"`
-	Cells    []string `json:"cells" doc:"Covered venue cells (level-14 S2 cell tokens), sorted; empty when none"`
-	Excluded []string `json:"excluded" doc:"Level-14 cells a zone-wide modifier does not cover (their latest check showed no match), sorted; empty when none or not zone-wide"`
+	ZoneWide bool     `json:"zone_wide" doc:"Covers the whole zone except the excluded cells: matches from at least 8 level-14 cells, two of them at least 10 km apart, are the majority of the zone's recent checks. The only coverage the derive path applies"`
+	Cells    []string `json:"cells" doc:"Venue cells (level-14 S2 cell tokens): two matches and no other result there since. Detection evidence only, never applied; sorted, empty when none"`
+	Excluded []string `json:"excluded" doc:"Level-14 cells a zone-wide modifier does not cover: their latest check disproved it, until a match there (at most 256). Sorted; empty when none or not zone-wide"`
 }
 
 // cellTokens is cells' tokens, sorted; empty, never nil.

@@ -80,6 +80,8 @@ type deriveEventsWriter struct {
 	// zones caches each deriveEventsCellLevel cell's location; locations
 	// holds one per zone name, so cells in one zone share it
 	// (time.LoadLocation returns a fresh copy of the zone table each call).
+	// zones is cleared before an insert would take it past
+	// deriveZoneCacheMax.
 	zones     map[s2.CellID]*time.Location
 	locations map[string]*time.Location
 
@@ -403,6 +405,9 @@ func (w *deriveEventsWriter) locate(ev deriveEventCheck) (string, int32) {
 	if !ok {
 		centre := s2.LatLngFromPoint(cell.Point())
 		loc = w.location(tz.SearchTimezone(centre.Lat.Degrees(), centre.Lng.Degrees()))
+		if len(w.zones) >= deriveZoneCacheMax {
+			clear(w.zones)
+		}
 		w.zones[cell] = loc
 	}
 	_, offset := ev.Time.In(loc).Zone()

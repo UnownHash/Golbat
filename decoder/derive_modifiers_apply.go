@@ -11,26 +11,24 @@ import (
 	"golbat/tz"
 )
 
-// Applying confirmed derivation modifiers (design §5–7). The learner
+// Applying confirmed derivation modifiers (design §5–7, §9). The learner
 // publishes an immutable modifierIndex behind derivationModifierIndex; the
 // derive path loads it once per derivation and, only when the record's
-// (species, form, strong) has a confirmed modifier, resolves the record's
-// level-14 cell — and its zone only for a zone-wide modifier that has not
-// excluded the cell (design §8–§9; venue cells are never applied). With no
-// modifier (nil index) a derivation costs one atomic load.
+// (species, form, strong) has an applied modifier, resolves the record's
+// level-14 cell and, unless every entry excludes it, the cell's zone. Only
+// zone-wide coverage is applied: venue cells are detection evidence, never
+// applied. With no modifier (nil index) a derivation costs one atomic load.
 
 // derivationModifierIndex holds the active modifiers; nil = none.
 var derivationModifierIndex atomic.Pointer[modifierIndex]
 
-// modifierEntry is one confirmed modifier as the derive path matches it: a
-// record is covered anywhere in its zone when zone-wide and the cell is not
-// excluded.
+// modifierEntry is one applied modifier as the derive path matches it: it
+// covers a record anywhere in its zone except its excluded cells.
 type modifierEntry struct {
 	typ      modifierType
 	effect   modifierEffect
 	size     map[string]sizeBoundary // size_cutoffs; shared, never modified
 	zone     string
-	zoneWide bool
 	excluded map[s2.CellID]uint8 // ≤ modExcludedMax; shared, never modified
 }
 
@@ -39,9 +37,6 @@ type modifierEntry struct {
 // entries of one lookup.
 func (e *modifierEntry) covers(cell s2.CellID, zone *string, zoneKnown *bool,
 	zoneOf func(s2.CellID) string) bool {
-	if !e.zoneWide {
-		return false
-	}
 	if _, found := e.excluded[cell]; found {
 		return false
 	}
@@ -54,36 +49,36 @@ func (e *modifierEntry) covers(cell s2.CellID, zone *string, zoneKnown *bool,
 // modifierIndex is an immutable snapshot of the learner's active modifiers.
 type modifierIndex struct {
 	// confirmed is keyed by species scope (PokemonID, Form, Strong): the
-	// confirmed modifiers the derive path applies. All-strong modifiers are
-	// never applied (design §7) and have no entry.
+	// modifiers the derive path applies (modifierApplied).
 	confirmed map[modifierScope][]modifierEntry
-	// active holds the species scopes with a candidate or confirmed
-	// modifier that covers something. The learner tracks no all-strong
-	// modifier, and all-strong summaries never reach the index.
+	// active holds the species scopes with a zone-wide candidate or
+	// confirmed modifier: their first sightings feed its last-seen time.
+	// The learner tracks no all-strong modifier, and all-strong summaries
+	// never reach the index.
 	active map[modifierScope]struct{}
 }
 
-// modifierApplied reports whether the derive path applies m: confirmed and
-// not all-strong. An all-strong level offset is detected and listed only: a
-// strong species at base levels kept getting it.
+// modifierApplied reports whether the derive path applies m: confirmed,
+// zone-wide and not all-strong. A modifier with venue cells only is
+// detection evidence (design §9); the learner ends a confirmed one as soon
+// as it is not zone-wide. An all-strong level offset is detected and listed
+// only: a strong species at base levels kept getting it.
 func modifierApplied(m *derivationModifier) bool {
-	return m.Status == modConfirmed && !m.Scope.AllStrong
+	return m.Status == modConfirmed && m.ZoneWide && !m.Scope.AllStrong
 }
 
 // buildModifierIndex builds the index from the learner's active modifiers
 // (published copies, never modified: the index shares their maps). It
-// returns nil when no modifier is active.
+// returns nil when nothing is applied or wants sightings.
 func buildModifierIndex(mods []*derivationModifier) *modifierIndex {
 	idx := &modifierIndex{
 		confirmed: make(map[modifierScope][]modifierEntry),
 		active:    make(map[modifierScope]struct{}),
 	}
-	n := 0
 	for _, m := range mods {
 		if m.Status != modCandidate && m.Status != modConfirmed {
 			continue
 		}
-		n++
 		// A sighting only marks a modifier seen where it covers: one with no
 		// coverage (a candidate from scattered noise, a venue) wants none.
 		if m.ZoneWide {
@@ -93,10 +88,10 @@ func buildModifierIndex(mods []*derivationModifier) *modifierIndex {
 			continue
 		}
 		e := modifierEntry{typ: m.Type, effect: m.Effect, size: m.Boundaries, zone: m.Zone,
-			zoneWide: m.ZoneWide, excluded: m.Excluded}
+			excluded: m.Excluded}
 		idx.confirmed[m.Scope] = append(idx.confirmed[m.Scope], e)
 	}
-	if n == 0 {
+	if len(idx.confirmed) == 0 && len(idx.active) == 0 {
 		return nil
 	}
 	return idx
@@ -112,36 +107,32 @@ func (idx *modifierIndex) wantsSighting(pokemonID, form int32, strong bool) bool
 	return ok
 }
 
-// derivationAdjust is what confirmed modifiers change in one derivation. The
+// derivationAdjust is what applied modifiers change in one derivation. The
 // zero value changes nothing.
 type derivationAdjust struct {
-	Suppress       bool // unexplained or a disputed level: derive nothing
+	Suppress       bool // unexplained: derive nothing
 	LevelDelta     int32
 	Quick, Charged int32                   // 0 = no pin
 	Size           map[string]sizeBoundary // nil = base cuts
-	// WithholdQuick, WithholdCharged and WithholdSize leave that value
-	// absent, neither pinned nor derived: two confirmed modifiers dispute
-	// it, and the base value is likely wrong too.
-	WithholdQuick, WithholdCharged, WithholdSize bool
 	// strong is the walk the adjustment was looked up for, the cut list
 	// Size is read against.
 	strong bool
 }
 
-// has reports whether the scope has a confirmed modifier: the only work
+// has reports whether the scope has an applied modifier: the only work
 // done before a key matches.
 func (idx *modifierIndex) has(pokemonID, form int32, strong bool) bool {
 	return len(idx.confirmed[modifierScope{PokemonID: pokemonID, Form: form, Strong: strong}]) > 0
 }
 
-// lookup combines the confirmed modifiers covering a record of the scope in
-// cell: a zone-wide modifier matches a cell it has not excluded in its
-// zone, calling zoneOf(cell) at most once per lookup; venue cells never
-// match (design §9). Unexplained suppresses everything. Two covering modifiers that dispute a value
-// withhold it rather than pick one (design §7): two level deltas suppress
-// (no IVs or level, as unexplained), two pins of one slot with different
-// moves withhold that slot, two size modifiers withhold size. It does not
-// allocate.
+// lookup combines the applied modifiers covering a record of the scope in
+// cell: one matches a cell it has not excluded in its zone, calling
+// zoneOf(cell) at most once per lookup. Unexplained suppresses everything;
+// the other types combine. Two covering modifiers never dispute a value:
+// a record's zone is one, and in one zone two modifiers of one scope, type
+// and slot cannot both hold the zone record's majority, which zone-wide
+// needs (and the runtime publishes one learner state at a time). It does
+// not allocate.
 func (idx *modifierIndex) lookup(pokemonID, form int32, strong bool, cell s2.CellID,
 	zoneOf func(s2.CellID) string) derivationAdjust {
 	entries := idx.confirmed[modifierScope{PokemonID: pokemonID, Form: form, Strong: strong}]
@@ -150,7 +141,7 @@ func (idx *modifierIndex) lookup(pokemonID, form int32, strong bool, cell s2.Cel
 	}
 	adj := derivationAdjust{strong: strong}
 	var zone string
-	zoneKnown, levelSet, sizeSet := false, false, false
+	zoneKnown := false
 	for i := range entries {
 		e := &entries[i]
 		if !e.covers(cell, &zone, &zoneKnown, zoneOf) {
@@ -160,21 +151,16 @@ func (idx *modifierIndex) lookup(pokemonID, form int32, strong bool, cell s2.Cel
 		case modUnexplained:
 			return derivationAdjust{Suppress: true, strong: strong}
 		case modLevelOffset:
-			if levelSet && adj.LevelDelta != e.effect.Delta {
-				return derivationAdjust{Suppress: true, strong: strong}
-			}
-			adj.LevelDelta, levelSet = e.effect.Delta, true
+			adj.LevelDelta = e.effect.Delta
 		case modMovePin:
 			switch e.effect.Slot {
 			case modSlotQuick:
-				adj.Quick, adj.WithholdQuick = pinSlot(adj.Quick, adj.WithholdQuick, e.effect.Move)
+				adj.Quick = e.effect.Move
 			case modSlotCharged:
-				adj.Charged, adj.WithholdCharged = pinSlot(adj.Charged, adj.WithholdCharged, e.effect.Move)
+				adj.Charged = e.effect.Move
 			}
 		case modSizeCutoffs:
-			if sizeSet {
-				adj.Size, adj.WithholdSize = nil, true
-			} else if sizeSet = true; len(e.size) > 0 {
+			if len(e.size) > 0 {
 				adj.Size = e.size
 			}
 		}
@@ -182,22 +168,15 @@ func (idx *modifierIndex) lookup(pokemonID, form int32, strong bool, cell s2.Cel
 	return adj
 }
 
-// pinSlot folds one more covering pin of move into a slot holding pinned
-// (0 = none) and withheld: a different move disputes the slot.
-func pinSlot(pinned int32, withheld bool, move int32) (int32, bool) {
-	switch {
-	case withheld:
-		return 0, true
-	case pinned != 0 && pinned != move:
-		return 0, true
-	}
-	return move, false
-}
+// deriveZoneCacheMax bounds each cell → zone cache (the learner's, the
+// decode path's and the events writer's): an insert that would take one
+// past it clears the cache first. Each entry costs a timezone search to
+// refill; 200,000 level-14 cells is ~200,000 km² of scanned area.
+var deriveZoneCacheMax = 200_000
 
 // modifierZoneCache is the decode path's cell → zone cache, filled only by
-// zone-wide matches (the learner keeps its own). Never pruned: it holds only
-// the cells where an affected species was derived under a zone-wide
-// modifier, bounded by the scanned area.
+// lookups that reach an applied modifier's zone check (the learner keeps
+// its own), at most deriveZoneCacheMax entries.
 var modifierZoneCache = xsync.NewMap[s2.CellID, string]()
 
 // modifierZoneOf is the IANA zone at cell's centre, "" when unknown or for
@@ -211,6 +190,10 @@ func modifierZoneOf(cell s2.CellID) string {
 	}
 	ll := cell.LatLng()
 	z := tz.SearchTimezone(ll.Lat.Degrees(), ll.Lng.Degrees())
+	// Concurrent misses may overshoot the cap by the number of decoders.
+	if modifierZoneCache.Size() >= deriveZoneCacheMax {
+		modifierZoneCache.Clear()
+	}
 	modifierZoneCache.Store(cell, z)
 	return z
 }

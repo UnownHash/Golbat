@@ -70,8 +70,7 @@ type modifierRuntime struct {
 
 	// zoneOf maps a level-14 cell to its index in zoneNames; zoneNames[0]
 	// is "" (unknown). zoneIndex is the reverse, so cells share one name.
-	// Never pruned: it is bounded by the level-14 cells scanned (~2 bytes of
-	// value per entry).
+	// Cleared before an insert would take it past deriveZoneCacheMax.
 	zoneOf    map[s2.CellID]uint16
 	zoneNames []string
 	zoneIndex map[string]uint16
@@ -328,6 +327,9 @@ func (r *modifierRuntime) zone(cell s2.CellID) string {
 		i = uint16(len(r.zoneNames)) // ~600 IANA zones: never overflows
 		r.zoneNames = append(r.zoneNames, name)
 		r.zoneIndex[name] = i
+	}
+	if len(r.zoneOf) >= deriveZoneCacheMax {
+		clear(r.zoneOf)
 	}
 	r.zoneOf[cell] = i
 	return name

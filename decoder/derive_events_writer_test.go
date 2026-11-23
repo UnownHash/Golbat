@@ -914,3 +914,22 @@ func TestDeriveEventsWriterDeviationTsInsideItsBucket(t *testing.T) {
 		t.Errorf("deviation (ts, event_ts) = %v, want %v", got, want)
 	}
 }
+
+// The writer's cell → location map is cleared before an insert would take
+// it past deriveZoneCacheMax.
+func TestDeriveEventsZoneCacheCapped(t *testing.T) {
+	withZoneCacheMax(t, 3)
+	clock := &testClock{time.Date(2026, 7, 15, 10, 0, 0, 0, time.UTC)}
+	w := newTestDeriveEventsWriter(t, t.TempDir(), clock)
+	defer func() { _ = w.close() }()
+	for i, c := range zoneCacheCells(7) {
+		ev := agreeingEventCheck(clock.t)
+		ev.CellID = int64(c.ChildBeginAtLevel(15))
+		if tok, off := w.locate(ev); tok != c.Parent(deriveEventsCellLevel).ToToken() || off != 60 {
+			t.Fatalf("cell %d: %s %d, want %s +60", i, tok, off, c.Parent(deriveEventsCellLevel).ToToken())
+		}
+		if len(w.zones) > 3 {
+			t.Fatalf("after %d cells: %d entries, want ≤ 3", i+1, len(w.zones))
+		}
+	}
+}

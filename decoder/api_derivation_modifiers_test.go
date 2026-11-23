@@ -113,7 +113,8 @@ func TestApiStatusDerivationModifiersFeature(t *testing.T) {
 }
 
 // applied is true only for a confirmed modifier the derive path applies:
-// candidates and all-strong level offsets are listed but not applied.
+// candidates, all-strong level offsets and a confirmed modifier that is not
+// zone-wide (venue cells only) are listed but not applied.
 func TestApiDerivationModifiersApplied(t *testing.T) {
 	t.Cleanup(func() { derivationModifierSnapshot.Store(nil) })
 	start := time.Date(2026, 11, 15, 9, 0, 0, 0, time.UTC)
@@ -121,10 +122,12 @@ func TestApiDerivationModifiersApplied(t *testing.T) {
 	all := levelMod(allStrongScope, 5, "Europe/London", cellSet(adjCellA))
 	cand := levelMod(modifierScope{PokemonID: 2}, 5, "Europe/London", cellSet(adjCellA))
 	cand.Status = modCandidate
-	for _, m := range []*derivationModifier{species, all, cand} {
+	venue := levelMod(modifierScope{PokemonID: 3}, 5, "Europe/London", cellSet(adjCellA))
+	venue.ZoneWide = false
+	for _, m := range []*derivationModifier{species, all, cand, venue} {
 		m.Start = start
 	}
-	mods := []*derivationModifier{species, all, cand}
+	mods := []*derivationModifier{species, all, cand, venue}
 	storeModifierSnapshot(mods)
 	got := map[string]bool{}
 	for _, m := range GetApiDerivationModifiers(start).Modifiers {
@@ -134,6 +137,7 @@ func TestApiDerivationModifiersApplied(t *testing.T) {
 		"2026-11-15-level_offset-1-0-delta+5":        true,
 		"2026-11-15-level_offset-all-strong-delta+5": false,
 		"2026-11-15-level_offset-2-0-delta+5":        false,
+		"2026-11-15-level_offset-3-0-delta+5":        false,
 	}
 	for id, w := range want {
 		if a, ok := got[id]; !ok || a != w {

@@ -321,6 +321,44 @@ caches are capped (cleared when they exceed 200,000 cells; recomputed on
 demand); every events-log row carries its bucket length so replay orders
 rows across a mid-file `bucket_minutes` change.
 
+### 9.1 As implemented (amended after implementation review)
+
+Where the implementation (two review rounds) differs from or adds to the
+decisions above:
+
+- **Venue-only never confirms.** A candidate confirms only while zone-wide,
+  with `confirm` located matches; there is no venue confirm path. A
+  modifier with venue cells alone stays a candidate and ends `unconfirmed`
+  (2 × `unseen`) or `unseen`. Venue counts are capped at 1024 cells per
+  modifier. A confirmed modifier ends as soon as it is not zone-wide
+  (`unseen` with too few fresh entries, `contradicted` when the latest
+  fresh entry is another effect, else `agreement`).
+- **Stay-on hysteresis.** Turning zone-wide on needs `confirm` fresh
+  entries and matches from 8 cells; a confirmed zone-wide modifier stays on
+  with `start` fresh entries and matches from `start` cells. Both need the
+  majority and a matching pair ≥ 10 km apart. Without this, Poisson-sampled
+  encounters at 12/h left fewer than `confirm` fresh entries in about a
+  quarter of hours and ended a live event `unseen`.
+- **Overflow ends the modifier.** A 257th excluded cell turns zone-wide off
+  for the modifier's life: a confirmed one ends (`agreement`); a candidate
+  ends `unconfirmed` at once, so a new one (excluded cells seeded from the
+  record's fresh entries, ≤ 16) can form when a real event starts after
+  noise filled the list.
+- **Size exclusion** is a per-cell mask of disproved boundaries: a contrary
+  roll sets the boundaries whose band it lies in, a refused roll those
+  whose interval it would empty; a match clears only the boundaries it
+  crosses.
+- **Pin-equal agreements** stay out of the zone record while that pin has
+  a modifier (they say nothing about it, and as neutral entries they
+  crowded the 16-entry ring below 8 matching cells).
+- **Index and API.** The index holds only applied modifiers (confirmed,
+  zone-wide, not all-strong) and is nil when nothing is applied or zone-wide;
+  the API's `applied` is the same test. Same-type dispute withholding was
+  removed: two modifiers of one scope, type and slot cannot both hold one
+  zone record's majority, and a record's zone is one, so the case cannot
+  arise. The three cell → zone caches are cleared before an insert would
+  take them past 200,000 entries.
+
 ## 10. Not included
 
 Loading a shared modifier file; retroactive correction; detection in the
