@@ -78,9 +78,10 @@ retain_days = 14
 
 # derivation_modifiers: opt-in, needs derive_iv. Learns event modifiers (a level offset, a forced
 # move, moved size cuts, or an unexplained mismatch) from live encounter checks, per timezone and
-# ~1 km (level-14 S2) cell, and applies confirmed ones to derived values. start deviations open a
-# candidate, confirm confirm it (within window_seconds), end agreements in its region end it, as does
-# not seeing its species there for unseen_seconds. A modifier seen in zone_wide_cells cells with no
+# ~1 km (level-14 S2) cell, and applies confirmed ones to derived values. start deviations within
+# window_seconds open a candidate; once it has confirm deviations in all (no time limit) and no
+# contradiction it is confirmed. end agreements in its region end it, as does not seeing its species
+# there for unseen_seconds. A modifier seen in zone_wide_cells cells with no
 # agreeing cell covers its whole timezone. Transitions are logged as [DERIVE_MODIFIER]; state is in
 # memory only (a restart relearns). Enabling it reserves ~1 MB for the event queue.
 [derivation_modifiers]
