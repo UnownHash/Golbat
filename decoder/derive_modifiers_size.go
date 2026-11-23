@@ -284,8 +284,9 @@ func (l *modifierLearner) sizeOpen(t *modTrack, st *modScopeState, now time.Time
 // sizeRoll applies an IV-agreeing roll (dev: a deviation across t's cut) to
 // t's modifier. Without a cell a deviation is an observation and nothing
 // else. A contrary roll is an agreement in the record, counts towards the
-// pause and disproves the boundary in its cell; another roll the interval
-// refuses is a contradiction and does the same. Any other first answers the
+// pause (unless its cell was excluded already) and disproves the boundary
+// in its cell; another roll the interval refuses is a contradiction and
+// does the same. Any other first answers the
 // cell's disproof when it contradicts it; from a cell still disproved it
 // then says nothing about the zone (the interval, the record and the pause
 // are left as they were), else it is evidence, and a deviation a match. A
@@ -296,18 +297,19 @@ func (l *modifierLearner) sizeRoll(t *modTrack, rec *modRecord, ev modifierEvent
 	if ev.Cell != 0 {
 		lower := ev.ObsSize <= c.below
 		kind, next, changed := m.Interval.fit(c, ev.ObsSize, ev.SizeRoll)
-		switch kind {
-		case sizeRollContrary:
-			rec.push(ev.Cell, 0, true, ev.Unix)
+		if kind != sizeRollAccepted {
+			if kind == sizeRollContrary {
+				rec.push(ev.Cell, 0, true, ev.Unix)
+			} else {
+				m.Contradictions++
+				rec.push(ev.Cell, modIDSizeOther, false, ev.Unix)
+				l.changed(m, modEvidence)
+			}
+			_, was := m.Excluded[ev.Cell]
 			l.sizeDisprove(t, ev.Cell, lower, ev.SizeRoll)
-			l.missed(m)
-			return
-		case sizeRollRefused:
-			m.Contradictions++
-			rec.push(ev.Cell, modIDSizeOther, false, ev.Unix)
-			l.changed(m, modEvidence)
-			l.sizeDisprove(t, ev.Cell, lower, ev.SizeRoll)
-			l.missed(m)
+			if !was {
+				l.missed(m)
+			}
 			return
 		}
 		if !l.sizeResolve(t, ev.Cell, lower, ev.SizeRoll) {

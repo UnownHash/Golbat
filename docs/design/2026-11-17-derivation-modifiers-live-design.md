@@ -439,7 +439,10 @@ Rules changed or added; where they differ from §10 and §10.1 these hold.
   agreements only": an effect replaced by another at once (+5 by +3) shows
   no base result, so the stale +5 was applied until its share fell to half,
   about 28 minutes at 12 checks an hour. It now stops at the second check
-  (about 11 minutes at 12 an hour, the same as a plain end).
+  (about 11 minutes at 12 an hour, the same as a plain end). A non-match
+  from a cell already excluded from the modifier does not count: a densely
+  scanned venue with another effect would otherwise keep pausing a
+  zone-wide event.
 - **Excluded size evidence stays local.** A roll from a cell with an
   unresolved disproof for a boundary says where that cell's cut lies, not
   the zone's. Resolution is evaluated first; while the cell stays

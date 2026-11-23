@@ -495,7 +495,8 @@ func (l *modifierLearner) takeDirty() modDirty {
 // pin-equal ring, where it does not displace that pin's evidence. It
 // disproves the cell for every other effect's modifier (and for
 // every modifier, when it agrees): the cell is excluded from it until a
-// match there, and the check counts towards its pause. It gates or voids
+// match there, and the check counts towards its pause unless the cell was
+// excluded already. It gates or voids
 // the pending deviations of tracks without one, counts the match for its
 // own track, and re-judges the dimension's modifiers. A move agreeing with a
 // pinned move is neutral for that pin alone (the base walk and the pin give
@@ -523,8 +524,12 @@ func (l *modifierLearner) check(st *modScopeState, sk modScopeKey, d modDim, agr
 		switch {
 		case t.mod != nil:
 			if located {
+				// A cell already excluded says nothing new about the zone.
+				_, was := t.mod.Excluded[ev.Cell]
 				l.disprove(t, ev.Cell, !agree)
-				l.missed(t.mod)
+				if !was {
+					l.missed(t.mod)
+				}
 			}
 		case agree:
 			t.clearCell(ev.Cell, ev.Unix)

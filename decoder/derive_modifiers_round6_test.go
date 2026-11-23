@@ -244,3 +244,52 @@ func TestModifierCandidateDeadlineBeforeConfirmOnSweep(t *testing.T) {
 		t.Fatalf("sweep past the deadline: %v, want ended unconfirmed and never confirmed", states(trs))
 	}
 }
+
+// A cell already excluded from a modifier says nothing new about the zone:
+// a densely scanned venue with another effect must not keep pausing a
+// zone-wide event. A non-match from a cell not yet excluded still counts.
+func TestModifierExcludedCellDoesNotPause(t *testing.T) {
+	l := newModifierLearner(defaultModifierParams())
+	cells := modWideCells(12)
+	confirmPin(t, l, modZone, modT0, cells[:10]...)
+	ts := modT0
+	feed := func(cell s2.CellID, move int32) *derivationModifier {
+		t.Helper()
+		ts = ts.Add(time.Second)
+		l.feed(modCheck(ts, cell, withCharged(move)), modZone)
+		return modifierWith(t, l, 494)
+	}
+	for i := range 4 {
+		if m := feed(cellA, 300); m.Paused || m.Covers(modZone, cellA) {
+			t.Fatalf("venue check %d: paused %v covers the venue %v, want applied less the venue cell", i+1, m.Paused, m.Covers(modZone, cellA))
+		}
+	}
+	// The venue's first check counted once: one more from a fresh cell pauses.
+	if m := feed(cellD, 300); !m.Paused {
+		t.Fatal("a non-match from a fresh cell after the venue's first: not paused")
+	}
+	if m := feed(cells[10], 494); m.Paused {
+		t.Fatal("paused after a match")
+	}
+	// Both cells are excluded now: neither counts again.
+	feed(cellA, 300)
+	if m := feed(cellD, 300); m.Paused {
+		t.Fatal("paused by checks from cells already excluded")
+	}
+}
+
+// The same for a size boundary: contrary rolls from one excluded cell do
+// not pause it; the next from another cell does.
+func TestModifierSizeExcludedCellDoesNotPause(t *testing.T) {
+	l := sizeConfirmed(t)
+	for i := range 4 {
+		l.feed(modCheck(modT0.Add(time.Minute+time.Duration(i)*time.Second), cellD, withSize(0.006, 2)), modZone)
+		if m := onlyActive(t, l); m.Paused {
+			t.Fatalf("contrary roll %d from one cell: paused", i+1)
+		}
+	}
+	l.feed(modCheck(modT0.Add(2*time.Minute), cellE, withSize(0.016, 1)), modZone)
+	if m := onlyActive(t, l); !m.Paused {
+		t.Fatal("a refused roll from a fresh cell after the first: not paused")
+	}
+}

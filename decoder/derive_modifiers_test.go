@@ -610,7 +610,7 @@ func TestModifierLearnerDirty(t *testing.T) {
 	check("second match: a venue cell listed", evidence)
 	feed(cellD)
 	check("cell excluded", shrink)
-	feed(cellD)
+	feed(cellF) // from another cell: one already excluded does not count
 	check("second agreement running: paused", shrink)
 	feed(cellD)
 	check("repeated agreement in an excluded cell, already paused", modDirty{})
@@ -622,8 +622,8 @@ func TestModifierLearnerDirty(t *testing.T) {
 	check("another effect in a covered cell", shrink)
 	feed(cellA)
 	check("agreement in a listed venue cell", shrink)
-	if m := modifierWith(t, l, 494); len(m.Cells) != 0 || len(m.Excluded) != 2 {
-		t.Fatalf("cells %v excluded %v, want no venue cell and cells A and E excluded", m.Cells, m.Excluded)
+	if m := modifierWith(t, l, 494); len(m.Cells) != 0 || len(m.Excluded) != 3 {
+		t.Fatalf("cells %v excluded %v, want no venue cell and cells A, E and F excluded", m.Cells, m.Excluded)
 	}
 
 	// A candidate's changes are evidence only: the index's lookup holds
@@ -657,7 +657,7 @@ func TestModifierLearnerVersion(t *testing.T) {
 		t.Fatal("an excluded cell left the version unchanged")
 	}
 	v = m.version
-	l.feed(modCheck(modT0.Add(2*time.Second), cellD), modZone)
+	l.feed(modCheck(modT0.Add(2*time.Second), cellE), modZone)
 	if m.version == v || !m.Paused {
 		t.Fatal("the second agreement running did not pause and bump the version")
 	}

@@ -296,8 +296,9 @@ with an empty `modifiers` array.
 - `paused` is true when the zone's last two located checks that say
   anything about the modifier were not its effect (the base value, or
   another effect: another delta or move, a size roll its interval
-  refuses), with no match between or since (a check without a cell or a
-  pin-equal move agreement neither counts nor resets). Every event seen
+  refuses), with no match between or since (a check without a cell, one from
+  a cell already in `excluded`, or a pin-equal move agreement neither
+  counts nor resets). Every event seen
   applied to its whole scope, so a live event does not pause; one that has
   ended, or was replaced by another effect, is paused at the second such
   check. A paused modifier stays listed with its

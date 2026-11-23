@@ -78,7 +78,9 @@ func (l *modifierLearner) excludedCap(zone string) int {
 }
 
 // missed counts a located check that says something about m and is not its
-// effect: an agreement with the base value or another effect (design
+// effect, from a cell not already excluded from m (the callers skip those:
+// a densely scanned venue with another effect would else keep pausing a
+// zone-wide event): an agreement with the base value or another effect (design
 // §10.2: a superseding effect brings no agreement, and the superseded one
 // was applied until its share fell to half, about 28 minutes at 12 checks
 // an hour). The modPauseAfter-th running pauses m: every event seen applied
