@@ -117,10 +117,12 @@ func For(encounterID uint64, weatherBoosted bool, form int32) Draw {
 //
 // The move indices continue the walk as for an ordinary encounter and match
 // where the game draws them. An event can fix (pin) a strong species' move,
-// often outside its pool; a pinned slot takes no draw, so a pinned quick move
-// shifts the charged draw into the quick move's position. Such moves are
-// wrong until an encounter corrects them, as event moves are for ordinary
-// spawns; checkDerivation logs them so a pin list can be built from the logs.
+// often outside its pool. A pin is a server override applied after the
+// normal walk: the walk is unchanged and no draw is skipped or shifted, so
+// every other value still matches (2026-11-15: forced charged moves, with
+// IVs, level, size and the quick move all agreeing). Such moves are wrong
+// until an encounter corrects them, as event moves are for ordinary spawns;
+// checkDerivation logs them and the derivation modifier learner pins them.
 //
 // Checked against a scanner export of GO Wild Area 2025 (44,078 strong
 // encounters) and two further datasets.

@@ -155,8 +155,14 @@ func FlushDerivationModifiers() {
 // submitDerivationModifierEvent hands ev to the learner without ever
 // blocking the decode path. A no-op when the learner is off or shutting
 // down; a full queue drops the event, reported at most once a second.
+//
+// ev.Unix is overwritten with the server's clock: the learner's windows and
+// unseen ends run on one clock, and a client or map timestamp (a sighting's
+// save time) can run ahead — one future-stamped sighting once ended every
+// modifier.
 func submitDerivationModifierEvent(ev modifierEvent) {
 	if r := derivationModifierRuntime; r != nil {
+		ev.Unix = time.Now().Unix()
 		r.submit(ev)
 	}
 }

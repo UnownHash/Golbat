@@ -1,8 +1,10 @@
 package decoder
 
 import (
+	"context"
 	"testing"
 
+	"golbat/db"
 	"golbat/derive/encounter"
 	"golbat/pogo"
 
@@ -435,5 +437,45 @@ func TestDerivationAdjustRepopulateIvUnexplained(t *testing.T) {
 	p.repopulateIv(int64(pogo.GameplayWeatherProto_RAINY), false)
 	if p.AtkIv.Valid || p.Level.Valid {
 		t.Errorf("unexplained left atk=%v level=%v valid; want cleared as with derive_iv off", p.AtkIv, p.Level)
+	}
+}
+
+// A wild update derives with the cell the record is being placed in, not the
+// previous sighting's: a record moving from cell A (local +5 level modifier)
+// to cell B gets B's values, both when the boost flip re-derives
+// (repopulateIv, inside addWildPokemon) and when values are absent
+// (deriveIvIfAbsent).
+func TestUpdateFromWildDerivesWithThePlacedCell(t *testing.T) {
+	const spawnID = int64(0x47b973e0595)
+	withDeriveIv(t, true)
+	seedSyncedSpawnpoint(t, spawnID)
+	withModifierIndex(t, levelMod(modifierScope{PokemonID: 1}, 5, adjZoneA, cellSet(adjCellA)))
+	cellA15 := int64(s2.CellIDFromLatLng(s2.LatLngFromDegrees(adjLatA, adjLonA)).Parent(15))
+	cellB15 := int64(s2.CellIDFromLatLng(s2.LatLngFromDegrees(adjLatB, adjLonB)).Parent(15))
+	wild := func(weather pogo.GameplayWeatherProto_WeatherCondition) *pogo.WildPokemonProto {
+		return &pogo.WildPokemonProto{EncounterId: adjEid, SpawnPointId: "47b973e0595",
+			Latitude: adjLatB, Longitude: adjLonB,
+			Pokemon: &pogo.PokemonProto{PokemonId: 1,
+				PokemonDisplay: &pogo.PokemonDisplayProto{WeatherBoostedCondition: weather}}}
+	}
+
+	// Derived in A, sighted in B under a boost flip.
+	flip := adjRecord(1, adjLatA, adjLonA, false)
+	flip.CellId = null.ValueFrom(cellA15)
+	flip.deriveIvIfAbsent()
+	if want := encounter.Derive(adjEid, false, false, 0).Level + 5; int32(flip.Level.ValueOrZero()) != want {
+		t.Fatalf("setup: level in A = %v, want %d", flip.Level, want)
+	}
+	flip.updateFromWild(context.Background(), db.DbDetails{}, wild(pogo.GameplayWeatherProto_RAINY), cellB15, nil, 1700000000000, "t")
+	if want := encounter.Derive(adjEid, true, false, 0).Level; int32(flip.Level.ValueOrZero()) != want {
+		t.Errorf("boost flip into B: level = %v, want boosted base %d (no modifier in B)", flip.Level, want)
+	}
+
+	// No values yet, last placed in A, sighted in B.
+	absent := adjRecord(1, adjLatA, adjLonA, false)
+	absent.CellId = null.ValueFrom(cellA15)
+	absent.updateFromWild(context.Background(), db.DbDetails{}, wild(pogo.GameplayWeatherProto_NONE), cellB15, nil, 1700000000000, "t")
+	if want := encounter.Derive(adjEid, false, false, 0).Level; int32(absent.Level.ValueOrZero()) != want {
+		t.Errorf("derive into B: level = %v, want base %d (no modifier in B)", absent.Level, want)
 	}
 }

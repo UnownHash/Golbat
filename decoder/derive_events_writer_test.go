@@ -831,3 +831,26 @@ func TestDeriveEventsGolden(t *testing.T) {
 			deriveEventsGolden, got, want)
 	}
 }
+
+// A check stamped after the writer's clock (a client clock running ahead) is
+// bucketed at the writer's clock: it must not flush the open bucket early
+// or open one in the future.
+func TestDeriveEventsWriterClampsFutureEvent(t *testing.T) {
+	dir := t.TempDir()
+	clock := &testClock{time.Date(2026, 11, 15, 10, 3, 0, 0, time.UTC)}
+	w := newTestDeriveEventsWriter(t, dir, clock)
+
+	w.handle(agreeingEventCheck(clock.t))
+	w.handle(agreeingEventCheck(clock.t.Add(3 * time.Hour)))
+	if err := w.close(); err != nil {
+		t.Fatal(err)
+	}
+
+	sums := rowsOfKind(readEventLines(t, eventsFile(dir, clock.t)), "summary")
+	if len(sums) != 1 {
+		t.Fatalf("got %d summaries, want 1 (the future check in the current bucket)", len(sums))
+	}
+	if s := sums[0]; s["bucket"] != float64(time.Date(2026, 11, 15, 10, 0, 0, 0, time.UTC).Unix()) || s["checked"] != 2.0 {
+		t.Errorf("summary bucket %v checked %v, want the 10:00 bucket with 2", s["bucket"], s["checked"])
+	}
+}

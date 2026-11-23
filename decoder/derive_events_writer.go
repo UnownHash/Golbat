@@ -301,8 +301,15 @@ func (w *deriveEventsWriter) run() {
 // handle counts ev in its bucket's summary and, if it deviates, writes its
 // deviation row; a sighting only counts in Seen. An event for a later bucket flushes the current one first;
 // one for an earlier bucket (cross-goroutine skew) counts in the current one.
+// One stamped after the writer's clock (a sighting's client or map time
+// running ahead) is bucketed at the writer's clock, so it cannot flush the
+// open bucket early or open one in the future.
 func (w *deriveEventsWriter) handle(ev deriveEventCheck) {
-	b := ev.Time.UTC().Truncate(w.bucket)
+	at := ev.Time
+	if now := w.now(); at.After(now) {
+		at = now
+	}
+	b := at.UTC().Truncate(w.bucket)
 	if !w.bucketStart.IsZero() && b.After(w.bucketStart) {
 		w.flushBucket()
 	}

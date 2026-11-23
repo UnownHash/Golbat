@@ -198,8 +198,10 @@ var unparseableSpawnpointIds util.DropReporter
 // having changed nothing, when the spawnpoint id is not parseable or when
 // the proto is at 0,0 and the id does not decode: the sighting cannot be
 // placed and the caller must drop it. Callers therefore run it before any
-// other mutation of the record.
-func (pokemon *Pokemon) addWildPokemon(ctx context.Context, db db.DbDetails, wildPokemon *pogo.WildPokemonProto, timestampMs int64, trustworthyTimestamp bool) bool {
+// other mutation of the record. A valid cellId (the sighting's level-15 map
+// cell) is stored with the coordinates, before anything here can derive;
+// an invalid one leaves the stored cell as it is.
+func (pokemon *Pokemon) addWildPokemon(ctx context.Context, db db.DbDetails, wildPokemon *pogo.WildPokemonProto, cellId null.Int, timestampMs int64, trustworthyTimestamp bool) bool {
 	if wildPokemon.EncounterId != uint64(pokemon.Id) {
 		panic("Unmatched EncounterId")
 	}
@@ -222,6 +224,9 @@ func (pokemon *Pokemon) addWildPokemon(ctx context.Context, db db.DbDetails, wil
 	}
 	pokemon.SetLat(lat)
 	pokemon.SetLon(lon)
+	if cellId.Valid {
+		pokemon.SetCellId(cellId)
+	}
 	pokemon.SetSpawnId(null.IntFrom(spawnId))
 
 	pokemon.setExpireTimestampFromSpawnpoint(ctx, db, timestampMs, trustworthyTimestamp)
@@ -324,8 +329,15 @@ func (pokemon *Pokemon) applySightingDerivation() {
 // updateFromWild applies a GMO wild sighting. It returns false, with the
 // record untouched, when the sighting cannot be placed (see addWildPokemon);
 // the caller must then skip the save.
+//
+// The sighting's cell is assigned inside addWildPokemon, with the
+// coordinates and before its setPokemonDisplay: that can re-derive
+// (repopulateIv), as can applySightingDerivation below, and a derivation
+// modifier is looked up by the record's cell (pokemonModifierCell), so a
+// record moving cells must derive with the cell it is placed in, not the
+// previous sighting's. Nothing else on this path reads the cell.
 func (pokemon *Pokemon) updateFromWild(ctx context.Context, db db.DbDetails, wildPokemon *pogo.WildPokemonProto, cellId int64, weather map[int64]pogo.GameplayWeatherProto_WeatherCondition, timestampMs int64, username string) bool {
-	if !pokemon.addWildPokemon(ctx, db, wildPokemon, timestampMs, true) {
+	if !pokemon.addWildPokemon(ctx, db, wildPokemon, null.IntFrom(cellId), timestampMs, true) {
 		return false
 	}
 	pokemon.SetIsEvent(0)
@@ -335,7 +347,6 @@ func (pokemon *Pokemon) updateFromWild(ctx context.Context, db db.DbDetails, wil
 	}
 	pokemon.applySightingDerivation()
 	pokemon.recomputeCpIfNeeded(ctx, db, weather)
-	pokemon.SetCellId(null.IntFrom(cellId))
 	pokemon.setUsernameIfStored(username)
 	return true
 }
@@ -2032,6 +2043,15 @@ func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails
 		pokemon.setUsernameIfStored(username)
 		return
 	}
+	// Each spawn is one piece of evidence for the modifier learner, however
+	// often it is encountered (design 2026-11-17 §7 "Evidence"): only an
+	// encounter of a record that held no encounter-reported scan feeds it.
+	// Decided from the record's own state before this encounter changes
+	// it: no scan history (in memory or serialised) and not loaded with an
+	// encounter seen type (a reload without pokemon_internal_to_db keeps
+	// the seen type but not the history). The events log gets every check.
+	firstEncounter := derivationModifierLearnerOn && len(pokemon.scanHistory) == 0 &&
+		len(pokemon.GolbatInternal) == 0 && !encounteredSeenType(pokemon.oldValues.SeenType.Code)
 	pokemon.SetShiny(null.BoolFrom(proto.PokemonDisplay.Shiny))
 	pokemon.SetCp(null.IntFrom(int64(proto.Cp)))
 	pokemon.SetMove1(null.IntFrom(int64(proto.Move1)))
@@ -2226,12 +2246,13 @@ func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails
 	// against observedScan — captured before detectDitto ran — not the
 	// (possibly Ditto-rewritten) pokemon record.
 	chk := pokemon.checkDerivation(&observedScan, int32(proto.Size), int32(proto.Move1), int32(proto.Move2), pokemon.SeenType.Code.String(), wasRollMarked, hadDetectEvidence || (wasDitto && !pokemon.IsDitto))
-	// The same check feeds the events log and the modifier learner (as a
-	// compact modifierEvent, never the full record).
+	// The same check feeds the events log and, for a spawn's first
+	// encounter, the modifier learner (as a compact modifierEvent, never
+	// the full record).
 	if derivationEventsWriter != nil || derivationModifierLearnerOn {
 		if ev, ok := newDeriveEventCheck(pokemon, &observedScan, chk, username, time.Now()); ok {
 			submitDerivationEvent(ev)
-			if derivationModifierLearnerOn {
+			if firstEncounter {
 				submitDerivationModifierEvent(newModifierEvent(ev))
 			}
 		}
@@ -2251,7 +2272,7 @@ func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails
 // with the record untouched, when the encounter's wild proto cannot be
 // placed (see addWildPokemon); the caller must then skip the save.
 func (pokemon *Pokemon) updatePokemonFromEncounterProto(ctx context.Context, db db.DbDetails, encounterData *pogo.EncounterOutProto, username string, timestampMs int64) bool {
-	if !pokemon.addWildPokemon(ctx, db, encounterData.Pokemon, timestampMs, false) {
+	if !pokemon.addWildPokemon(ctx, db, encounterData.Pokemon, null.Int{}, timestampMs, false) {
 		return false
 	}
 	pokemon.SetIsEvent(0)

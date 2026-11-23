@@ -13,6 +13,7 @@ import (
 
 	"golbat/config"
 	"golbat/db"
+	"golbat/pogo"
 )
 
 // withModifierRuntime installs r as the process-wide learner (switched on)
@@ -211,8 +212,15 @@ func TestSubmitDerivationModifierEventOffIsNoop(t *testing.T) {
 }
 
 // saveNewModifierTestPokemon saves a new strong 959/3272 record as a first
-// sighting (no DB: memory-only, webhooks to a sink).
+// sighting at modT0 (no DB: memory-only, webhooks to a sink).
 func saveNewModifierTestPokemon(t *testing.T, id uint64) {
+	t.Helper()
+	saveNewModifierTestPokemonAt(t, id, modT0.Unix())
+}
+
+// saveNewModifierTestPokemonAt is saveNewModifierTestPokemon with the save
+// stamped at (the sighting's map timestamp).
+func saveNewModifierTestPokemonAt(t *testing.T, id uint64, at int64) {
 	t.Helper()
 	freshPokemonRecord(t, id)
 	p, unlock, err := getOrCreatePokemonRecord(context.Background(), db.DbDetails{}, id, "t")
@@ -225,7 +233,7 @@ func saveNewModifierTestPokemon(t *testing.T, id uint64) {
 	p.SetIsStrong(null.BoolFrom(true))
 	p.Lat, p.Lon = 51.50, -0.12
 	p.SetSeenType(SeenTypeCodeWild)
-	savePokemonRecordAsAtTime(context.Background(), db.DbDetails{}, p, false, false, true, modT0.Unix(), "t")
+	savePokemonRecordAsAtTime(context.Background(), db.DbDetails{}, p, false, false, true, at, "t")
 }
 
 func TestDerivationModifierSightingGated(t *testing.T) {
@@ -248,9 +256,33 @@ func TestDerivationModifierSightingGated(t *testing.T) {
 		t.Fatalf("active scope: %d sightings sent, want 1", n)
 	}
 	ev := <-r.events
-	if !ev.Sighting || ev.PokemonID != 959 || ev.Form != 3272 || !ev.Strong || ev.Cell != cellA ||
-		ev.Unix != modT0.Unix() {
-		t.Errorf("sighting %+v, want strong 959/3272 in cellA at modT0", ev)
+	if !ev.Sighting || ev.PokemonID != 959 || ev.Form != 3272 || !ev.Strong || ev.Cell != cellA {
+		t.Errorf("sighting %+v, want strong 959/3272 in cellA", ev)
+	}
+	// Stamped with the server's clock at submit, not the save's map time.
+	if d := time.Now().Unix() - ev.Unix; d < 0 || d > 1 {
+		t.Errorf("sighting Unix %d, want now (%d)", ev.Unix, time.Now().Unix())
+	}
+}
+
+// A sighting whose map timestamp is hours ahead reaches the learner on the
+// server's clock: one future-stamped sighting once ended every modifier.
+func TestDerivationModifierSightingUsesServerClock(t *testing.T) {
+	lureTestSetup(t)
+	r := newModifierRuntime(defaultModifierParams(), 8) // not started: events stay queued
+	withModifierRuntime(t, r)
+	pin := &derivationModifier{Type: modMovePin, Scope: modifierScope{PokemonID: 959, Form: 3272, Strong: true},
+		Effect: modifierEffect{Slot: modSlotCharged, Move: 494}, Zone: modZone, Status: modCandidate,
+		InCells: cellSet(cellA), Outside: cellSet()}
+	derivationModifierIndex.Store(buildModifierIndex([]*derivationModifier{pin}, 3))
+
+	saveNewModifierTestPokemonAt(t, 990003, time.Now().Add(3*time.Hour).Unix())
+	if n := len(r.events); n != 1 {
+		t.Fatalf("%d sightings sent, want 1", n)
+	}
+	ev := <-r.events
+	if d := time.Now().Unix() - ev.Unix; d < 0 || d > 1 {
+		t.Errorf("sighting Unix %d, want within a second of now (%d)", ev.Unix, time.Now().Unix())
 	}
 }
 
@@ -413,5 +445,60 @@ func TestDerivationModifiersRuntimeEvidenceRateLimited(t *testing.T) {
 	r.handle(modCheck(modT0.Add(11*time.Second), cellA)) // changes nothing itself
 	if obs := activeDerivationModifiers()[0].Observations; obs != 11 {
 		t.Fatalf("observations %d after the interval, want 11", obs)
+	}
+}
+
+// Each spawn counts once: the learner gets a record's first encounter only,
+// however often (or under whatever weather) the spawn is encountered again,
+// while the events log still gets every check.
+func TestAddEncounterPokemonFeedsLearnerOncePerSpawn(t *testing.T) {
+	r := newModifierRuntime(defaultModifierParams(), 8) // not started: events stay queued
+	withModifierRuntime(t, r)
+	w := newTestDeriveEventsWriter(t, t.TempDir(), &testClock{time.Now()})
+	w.events = make(chan deriveEventCheck, 8) // no reader
+	prevWriter := derivationEventsWriter
+	derivationEventsWriter = w
+	t.Cleanup(func() { derivationEventsWriter = prevWriter })
+
+	// cpm 0.5 is level 14; 0.5755 is 19, the same spawn boosted (a
+	// boosted scan at the unboosted level would confirm a Ditto, which
+	// sends no check at all).
+	encounterAt := func(p *Pokemon, cpm float32) {
+		p.addEncounterPokemon(context.Background(), db.DbDetails{}, &pogo.PokemonProto{
+			PokemonId: 1, IndividualAttack: 10, IndividualDefense: 10, IndividualStamina: 10,
+			CpMultiplier: cpm, PokemonDisplay: &pogo.PokemonDisplayProto{},
+		}, "")
+	}
+	encounterOnce := func(p *Pokemon) { encounterAt(p, 0.5) }
+
+	p := &Pokemon{PokemonData: PokemonData{Id: Uint64Str(777888999112)}}
+	p.SetSeenType(SeenTypeCodeEncounter)
+	p.SetWeather(null.IntFrom(int64(pogo.GameplayWeatherProto_NONE)))
+	encounterOnce(p)
+	if len(r.events) != 1 || len(w.events) != 1 {
+		t.Fatalf("first encounter: learner %d, events log %d; want 1 and 1", len(r.events), len(w.events))
+	}
+	encounterOnce(p)
+	if len(r.events) != 1 || len(w.events) != 2 {
+		t.Errorf("re-encounter: learner %d, events log %d; want 1 and 2", len(r.events), len(w.events))
+	}
+	p.SetWeather(null.IntFrom(int64(pogo.GameplayWeatherProto_RAINY))) // a weather flip: same spawn
+	encounterAt(p, 0.5755)
+	if p.IsDitto {
+		t.Fatal("setup: the boosted re-encounter confirmed a Ditto")
+	}
+	if len(r.events) != 1 || len(w.events) != 3 {
+		t.Errorf("weather-flip re-encounter: learner %d, events log %d; want 1 and 3", len(r.events), len(w.events))
+	}
+
+	// A record reloaded from the database without its scan history: the
+	// seen type it was loaded with records the earlier encounter.
+	q := &Pokemon{PokemonData: PokemonData{Id: Uint64Str(777888999113)}}
+	q.SetSeenType(SeenTypeCodeEncounter)
+	q.SetWeather(null.IntFrom(int64(pogo.GameplayWeatherProto_NONE)))
+	q.snapshotOldValues()
+	encounterOnce(q)
+	if len(r.events) != 1 || len(w.events) != 4 {
+		t.Errorf("reloaded encountered record: learner %d, events log %d; want 1 and 4", len(r.events), len(w.events))
 	}
 }
