@@ -183,7 +183,9 @@ type derivationModifier struct {
 	// version counts the changes the learner reports through changed (and
 	// the confirm), so the runtime re-clones only a modifier that changed
 	// since its last publish. LastSeen is not versioned: it is not published.
-	version uint64
+	// cellsVersion counts the changes to Cells alone, so a republished copy
+	// whose cells did not change shares the previous copy's set.
+	version, cellsVersion uint64
 }
 
 // Covers reports whether a record in zone and cell is covered by m: one of
@@ -201,9 +203,20 @@ func (m *derivationModifier) Covers(zone string, cell s2.CellID) bool {
 
 // clone is an independent copy of m (sharing Excluded, which is immutable).
 func (m *derivationModifier) clone() *derivationModifier {
+	return m.cloneSharing(nil)
+}
+
+// cloneSharing is clone, sharing prev's Cells when prev (an earlier,
+// immutable copy of m) has m's cellsVersion: a publish never copies a cell
+// set that did not change.
+func (m *derivationModifier) cloneSharing(prev *derivationModifier) *derivationModifier {
 	c := *m
 	c.Boundaries = maps.Clone(m.Boundaries)
-	c.Cells = maps.Clone(m.Cells)
+	if prev != nil && prev.cellsVersion == m.cellsVersion {
+		c.Cells = prev.Cells
+	} else {
+		c.Cells = maps.Clone(m.Cells)
+	}
 	return &c
 }
 
@@ -575,6 +588,7 @@ func (l *modifierLearner) venueDrop(t *modTrack, cell s2.CellID, byEffect bool) 
 		return
 	}
 	delete(t.mod.Cells, cell)
+	t.mod.cellsVersion++
 	t.coveredMatches -= int(v.n)
 	t.lostToEffect = byEffect
 	l.changed(t.mod, modShrink)
@@ -603,6 +617,7 @@ func (l *modifierLearner) venueMatch(t *modTrack, cell s2.CellID, unix int64) bo
 		return false
 	}
 	t.mod.Cells[cell] = struct{}{}
+	t.mod.cellsVersion++
 	return true
 }
 

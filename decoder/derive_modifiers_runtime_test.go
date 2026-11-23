@@ -2,6 +2,7 @@ package decoder
 
 import (
 	"context"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -792,5 +793,81 @@ func TestDerivationModifiersRuntimeLevelConflictGrowthAtOnce(t *testing.T) {
 	feed(c3, 5)
 	if adj := derivationModifierIndex.Load().lookup(1, 0, true, c3, modZoneOf); adj.LevelDelta != 5 {
 		t.Errorf("+5 covering a new cell beside a confirmed +3: adjust %+v, want delta 5 at once", adj)
+	}
+}
+
+// TestDerivationModifiersRuntimeSharesUnchangedCells: a republished copy of
+// a modifier whose covered cells did not change shares the previous copy's
+// cell set; a newly covered cell gives it a new one.
+func TestDerivationModifiersRuntimeSharesUnchangedCells(t *testing.T) {
+	r := newModifierRuntime(defaultModifierParams(), 64)
+	clock := modT0
+	r.clock = func() time.Time { return clock }
+	withModifierRuntime(t, r)
+	ts := modT0
+	match := func(cell s2.CellID) {
+		r.handle(modCheck(ts, cell, withCharged(494)))
+		ts = ts.Add(time.Second)
+	}
+	for range 10 {
+		match(cellA)
+	}
+	first := activeDerivationModifiers()
+	if len(first) != 1 || first[0].Status != modConfirmed || first[0].ZoneWide {
+		t.Fatalf("snapshot %+v, want one confirmed venue modifier", first)
+	}
+	mapID := func(m *derivationModifier) uintptr { return reflect.ValueOf(m.Cells).Pointer() }
+
+	clock = clock.Add(deriveModifiersEvidenceInterval)
+	match(cellA) // evidence only
+	second := activeDerivationModifiers()
+	if second[0] == first[0] || second[0].Observations != 11 {
+		t.Fatalf("evidence not republished: %+v", second[0])
+	}
+	if mapID(second[0]) != mapID(first[0]) {
+		t.Error("unchanged cells were cloned")
+	}
+
+	clock = clock.Add(deriveModifiersEvidenceInterval)
+	match(cellA2)
+	match(cellA2) // covers cellA2
+	clock = clock.Add(deriveModifiersEvidenceInterval)
+	match(cellA)
+	third := activeDerivationModifiers()
+	if _, ok := third[0].Cells[cellA2]; !ok || mapID(third[0]) == mapID(second[0]) {
+		t.Errorf("new covered cell: cells %v, shared %v; want cellA2 in a new set",
+			third[0].Cells, mapID(third[0]) == mapID(second[0]))
+	}
+	if _, ok := second[0].Cells[cellA2]; ok {
+		t.Error("a published cell set was modified")
+	}
+}
+
+// TestDerivationModifiersRuntimePublishesAllStrongSummary: the runtime
+// publishes the all-strong summary with the snapshot, never in the index.
+func TestDerivationModifiersRuntimePublishesAllStrongSummary(t *testing.T) {
+	r := newModifierRuntime(defaultModifierParams(), 64)
+	withModifierRuntime(t, r)
+	ts := modT0
+	for _, sp := range []int32{1000, 1001} {
+		for range 10 {
+			r.handle(modCheck(ts, cellA, withLevelDelta(5), withSpecies(sp, 0)))
+			ts = ts.Add(time.Second)
+		}
+	}
+	var summary []ApiDerivationModifier
+	for _, m := range GetApiDerivationModifiers(ts).Modifiers {
+		if m.Scope.Pokemon == nil {
+			summary = append(summary, m)
+		}
+	}
+	if len(summary) != 1 || summary[0].Status != "confirmed" || summary[0].Applied {
+		t.Fatalf("summaries %+v, want one confirmed, unapplied", summary)
+	}
+	if idx := derivationModifierIndex.Load(); idx.anyAllStrong || idx.wantsSighting(635, 0, true) {
+		t.Error("the summary reached the index")
+	}
+	if n := len(activeDerivationModifiers()); n != 2 {
+		t.Errorf("%d active modifiers, want the 2 species", n)
 	}
 }

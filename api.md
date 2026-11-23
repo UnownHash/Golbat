@@ -194,10 +194,10 @@ than a flag on the endpoint they affect.
 ### GET /api/derivation/modifiers
 
 The encounter-derivation modifiers the learner currently holds (candidate and
-confirmed; ended ones are not listed), in the shareable modifiers format with
-a region. State is in memory only. When the learner is off
-(`features.derivation_modifiers` false) it returns version 1 with an empty
-`modifiers` array.
+confirmed; ended ones are not listed), plus all-strong summaries, in the
+shareable modifiers format with a region. State is in memory only. When the
+learner is off (`features.derivation_modifiers` false) it returns version 1
+with an empty `modifiers` array.
 
 **Authentication:** Required.
 
@@ -215,7 +215,8 @@ a region. State is in memory only. When the learner is off
       "status": "confirmed",
       "applied": true,
       "evidence": {"observations": 14, "contradictions": 0},
-      "region": {"zone": "Europe/London", "cells": null}
+      "region": {"zone": "Europe/London", "zone_wide": true,
+                 "cells": ["487604c5"], "excluded": ["487604c7"]}
     }
   ]
 }
@@ -224,32 +225,62 @@ a region. State is in memory only. When the learner is off
 - `id` is `<start date>-<type>-<scope>-<effect>`. It names the effect, not the
   zone, so it appears once per timezone where the modifier is active;
   `region.zone` tells them apart. The list is sorted by `id`, then `region.zone`.
-  Scope is `<id>-<form>`, prefixed `strong-` for strong pokemon; `all` /
-  `all-strong` cover every pokemon (no `scope.pokemon`).
+  Scope is `<id>-<form>`, prefixed `strong-` for strong pokemon;
+  `all-strong` is a summary (no `scope.pokemon`, see below).
 - `effect` is `{"type":"level_offset","delta":n}`,
   `{"type":"move_pin","slot":"quick|charged","move":id}` or
   `{"type":"size_cutoffs","boundaries":{"1/2":[lo,hi]}}` (a null end is
   unbounded) or `{"type":"unexplained"}` (IVs disagree, so derivation for the
   scope is suppressed; its id has no effect part).
 - `status` is `candidate` or `confirmed`; `window.end` is always null.
+- `region` is where the modifier covers a record, judged per timezone at two
+  scales:
+  - `zone_wide` (a global event): its effect is more than half of the zone's
+    last 16 located checks of the scope, the record holds at least `confirm`
+    of them, its matches lie under at least two ~10 km (level-10) S2 cells,
+    and the zone is known. It turns off as soon as that fails, or when the
+    zone has had no located check of the scope for `unseen_seconds`.
+    `excluded` lists the level-14 cells (at most 16) whose latest check in that
+    record was not this effect (an agreement or another effect); they are not
+    covered. A later match readmits a cell.
+  - `cells` (a ticketed venue): the level-14 S2 cells covered after two
+    matches there with no agreement or other effect in that cell since. One
+    agreement or other effect there removes the cell at once; so does
+    `unseen_seconds` without a match there.
+  `cells` and `excluded` are sorted tokens, empty (never null) when there are
+  none; a modifier can have both coverages. A covered venue cell is covered
+  even when the zone-wide coverage excludes it.
 - Lifecycle: `start` matching deviations (default 3) within `window_seconds`
-  open a candidate. It is confirmed once it has `confirm` matches (default 10)
-  located in S2 cells, no contradiction among its last 16 in-cell outcomes, and
-  matches in at least half of them. It ends, and drops out of this list, on
-  `end` consecutive in-cell agreements with the base value (default 8), on
-  contradiction (`contradicted`: at least `start` contradictions in the ring and
-  no fewer than its matches, as when another effect of the same type and scope
-  replaces it), or when its scope is not seen for `unseen_seconds`. Size-cutoff
-  modifiers also end when their cuts move. Ended modifiers appear only in the
-  `[DERIVE_MODIFIER]` log, with the end reason.
+  open a candidate. It is confirmed with `confirm` matches (default 10)
+  located in S2 cells while zone-wide, or with `confirm` matches inside its
+  covered venue cells (scattered noise that hits one cell twice covers it but
+  never confirms). A candidate not confirmed within `unseen_seconds` of its
+  start ends (`unconfirmed`); fresh deviations open a new one. A confirmed
+  modifier ends, and drops out of this list, when it covers nothing: reason
+  `agreement` when checks took its coverage, `contradicted` when its last
+  covered venue cell went to another effect, `unseen` when its coverage
+  lapsed for lack of checks or matches or its scope was not seen where it
+  covers for `unseen_seconds`. Sightings do not keep a modifier alive beyond
+  its checks. A size modifier is zone-wide only (no venue cells): its record
+  takes a deviation across a listed boundary as a match, a contrary roll (one
+  between a listed boundary's base cut and its interval that the base cut
+  classifies) as an agreement and a roll the fit refuses as another effect,
+  so it ends `agreement` when that turns zone-wide off. Ended modifiers appear only in the `[DERIVE_MODIFIER]` log, with the end
+  reason.
+- All-strong summary: when two or more strong species have an active
+  (candidate or confirmed) level offset with the same delta in one zone, an
+  extra entry with scope `{"strong": true}` and id
+  `<start date>-level_offset-all-strong-delta<±n>` reports them together
+  (detection only). Its status is `confirmed` when at least two of those
+  species are confirmed, else `candidate`; its start is the earliest of
+  theirs, its evidence their sum, and its region what they cover together
+  (`zone_wide` if one is, the union of their cells, no excluded cells).
 - `applied` is true when derivation applies the modifier: confirmed and not
-  `all-strong` (an all-strong level offset is detected and listed but never
-  applied). Where two confirmed modifiers of one type and slot both cover a
-  record they dispute the value and neither applies: two level offsets leave
-  the IVs and level underived, two pins of one slot leave that move absent,
-  two size modifiers leave size absent.
-- `region.cells` is the sorted level-14 S2 cell tokens the modifier covers, or
-  null when it covers its whole `zone`.
+  an all-strong summary (an all-strong offset is never applied; each strong
+  species' own offset is). Where two confirmed modifiers of one type and slot
+  both cover a record they dispute the value and neither applies: two level
+  offsets leave the IVs and level underived, two pins of one slot leave that
+  move absent, two size modifiers leave size absent.
 
 **Status Codes:**
 - 200: OK

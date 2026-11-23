@@ -3,9 +3,12 @@ package decoder
 import (
 	"cmp"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/golang/geo/s2"
 )
 
 // ApiDerivationModifiers is the shareable snapshot of the active derivation
@@ -13,7 +16,7 @@ import (
 type ApiDerivationModifiers struct {
 	Version     int                     `json:"version" doc:"Format version (1)"`
 	GeneratedAt string                  `json:"generated_at" doc:"RFC 3339 UTC time the snapshot was taken"`
-	Modifiers   []ApiDerivationModifier `json:"modifiers" doc:"Active (candidate and confirmed) modifiers sorted by id; empty when the learner is off"`
+	Modifiers   []ApiDerivationModifier `json:"modifiers" doc:"Active (candidate and confirmed) modifiers and all-strong summaries, sorted by id then zone; empty when the learner is off"`
 }
 
 type ApiDerivationModifier struct {
@@ -22,14 +25,14 @@ type ApiDerivationModifier struct {
 	Window   ApiModifierWindow   `json:"window"`
 	Effect   map[string]any      `json:"effect" doc:"level_offset {type, delta}, move_pin {type, slot, move} or size_cutoffs {type, boundaries: {cut: [lo, hi]}} with null for an unbounded end, or unexplained {type}"`
 	Status   string              `json:"status" doc:"candidate or confirmed"`
-	Applied  bool                `json:"applied" doc:"The derive path applies it: confirmed and not an all-strong scope (all-strong level offsets are listed but never applied)"`
+	Applied  bool                `json:"applied" doc:"The derive path applies it: confirmed and not an all-strong summary"`
 	Evidence ApiModifierEvidence `json:"evidence"`
 	Region   ApiModifierRegion   `json:"region"`
 }
 
 type ApiModifierScope struct {
 	Strong  bool                 `json:"strong"`
-	Pokemon []ApiModifierPokemon `json:"pokemon,omitempty" doc:"Absent for a modifier covering every pokemon of the strong class"`
+	Pokemon []ApiModifierPokemon `json:"pokemon,omitempty" doc:"Absent for an all-strong summary (two or more strong species at one level offset in one zone)"`
 }
 
 type ApiModifierPokemon struct {
@@ -48,11 +51,23 @@ type ApiModifierEvidence struct {
 	Contradictions int `json:"contradictions"`
 }
 
-// ApiModifierRegion is where the modifier applies: a zone, and its level-14
-// cells unless it covers the whole zone (cells null).
+// ApiModifierRegion is where the modifier applies (design §8): its zone less
+// the excluded cells when zone-wide, and its covered venue cells.
 type ApiModifierRegion struct {
-	Zone  string   `json:"zone"`
-	Cells []string `json:"cells" doc:"Level-14 S2 cell tokens, sorted; null when the modifier is zone-wide"`
+	Zone     string   `json:"zone" doc:"IANA timezone"`
+	ZoneWide bool     `json:"zone_wide" doc:"Covers the whole zone except the excluded cells"`
+	Cells    []string `json:"cells" doc:"Covered venue cells (level-14 S2 cell tokens), sorted; empty when none"`
+	Excluded []string `json:"excluded" doc:"Level-14 cells a zone-wide modifier does not cover (their latest check showed no match), sorted; empty when none or not zone-wide"`
+}
+
+// cellTokens is cells' tokens, sorted; empty, never nil.
+func cellTokens[S ~[]s2.CellID](cells S) []string {
+	out := make([]string, 0, len(cells))
+	for _, c := range cells {
+		out = append(out, c.ToToken())
+	}
+	slices.Sort(out)
+	return out
 }
 
 const apiModifierTimeFormat = "2006-01-02T15:04:05Z"
@@ -116,7 +131,11 @@ func apiModifierEffect(m *derivationModifier) map[string]any {
 func GetApiDerivationModifiers(now time.Time) *ApiDerivationModifiers {
 	out := &ApiDerivationModifiers{Version: 1, GeneratedAt: now.UTC().Format(apiModifierTimeFormat),
 		Modifiers: []ApiDerivationModifier{}}
-	for _, m := range activeDerivationModifiers() {
+	snap := derivationModifierSnapshot.Load()
+	if snap == nil {
+		return out
+	}
+	for _, m := range slices.Concat(snap.active, snap.summaries) {
 		am := ApiDerivationModifier{
 			ID:      apiModifierID(m),
 			Scope:   ApiModifierScope{Strong: m.Scope.Strong},
@@ -126,17 +145,11 @@ func GetApiDerivationModifiers(now time.Time) *ApiDerivationModifiers {
 			Applied: modifierApplied(m),
 			Evidence: ApiModifierEvidence{Observations: m.Observations,
 				Contradictions: m.Contradictions},
-			Region: ApiModifierRegion{Zone: m.Zone},
+			Region: ApiModifierRegion{Zone: m.Zone, ZoneWide: m.ZoneWide,
+				Cells: cellTokens(slices.Collect(maps.Keys(m.Cells))), Excluded: cellTokens(m.Excluded)},
 		}
 		if !m.Scope.AllStrong {
 			am.Scope.Pokemon = []ApiModifierPokemon{{ID: m.Scope.PokemonID, Form: m.Scope.Form}}
-		}
-		if !m.ZoneWide {
-			am.Region.Cells = make([]string, 0, len(m.Cells))
-			for c := range m.Cells {
-				am.Region.Cells = append(am.Region.Cells, c.ToToken())
-			}
-			slices.Sort(am.Region.Cells)
 		}
 		out.Modifiers = append(out.Modifiers, am)
 	}

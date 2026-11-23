@@ -2,6 +2,9 @@ package decoder
 
 import (
 	"encoding/json"
+	"reflect"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -22,7 +25,7 @@ func TestApiDerivationModifiersShape(t *testing.T) {
 	unexp := withSpread(&derivationModifier{Type: modUnexplained, Scope: modifierScope{PokemonID: 2, Form: 5, Strong: true},
 		Zone: "Europe/London", Status: modCandidate, Start: start, Cells: zoneWideIn()})
 	mods := []*derivationModifier{size, pin, unexp}
-	derivationModifierSnapshot.Store(&mods)
+	storeModifierSnapshot(mods)
 
 	res := GetApiDerivationModifiers(time.Date(2026, 11, 17, 12, 0, 0, 0, time.UTC))
 	if res.Version != 1 || res.GeneratedAt != "2026-11-17T12:00:00Z" || len(res.Modifiers) != 3 {
@@ -32,7 +35,7 @@ func TestApiDerivationModifiersShape(t *testing.T) {
 	if u.ID != "2026-11-15-unexplained-strong-2-5" || len(u.Effect) != 1 || u.Effect["type"] != "unexplained" {
 		t.Fatalf("unexplained %+v", u)
 	}
-	if p.ID != "2026-11-15-move_pin-strong-959-3272-charged-494" || p.Region.Cells != nil || p.Status != "confirmed" {
+	if p.ID != "2026-11-15-move_pin-strong-959-3272-charged-494" || !p.Region.ZoneWide || p.Status != "confirmed" {
 		t.Fatalf("pin %+v", p)
 	}
 	if s.ID != "2026-11-15-size_cutoffs-1-0" || s.Status != "candidate" || len(s.Region.Cells) != 2 ||
@@ -52,9 +55,6 @@ func TestApiDerivationModifiersShape(t *testing.T) {
 	bd := eff["boundaries"].(map[string]any)["1/2"].([]any)
 	if eff["type"] != "size_cutoffs" || bd[0] != 0.5 || bd[1] != nil {
 		t.Fatalf("size effect %v", eff)
-	}
-	if ms[0].(map[string]any)["region"].(map[string]any)["cells"] != nil {
-		t.Fatalf("zone-wide cells should be null: %s", b)
 	}
 	if ms[0].(map[string]any)["window"].(map[string]any)["end"] != nil {
 		t.Fatalf("window end should be null: %s", b)
@@ -86,7 +86,7 @@ func TestApiDerivationModifiersSortByZoneWithinID(t *testing.T) {
 			Start: start, Cells: zoneWideIn()})
 	}
 	mods := []*derivationModifier{mk("Europe/Paris"), mk("America/New_York"), mk("Europe/London")}
-	derivationModifierSnapshot.Store(&mods)
+	storeModifierSnapshot(mods)
 	res := GetApiDerivationModifiers(start)
 	want := []string{"America/New_York", "Europe/London", "Europe/Paris"}
 	if len(res.Modifiers) != 3 {
@@ -125,7 +125,7 @@ func TestApiDerivationModifiersApplied(t *testing.T) {
 		m.Start = start
 	}
 	mods := []*derivationModifier{species, all, cand}
-	derivationModifierSnapshot.Store(&mods)
+	storeModifierSnapshot(mods)
 	got := map[string]bool{}
 	for _, m := range GetApiDerivationModifiers(start).Modifiers {
 		got[m.ID] = m.Applied
@@ -149,5 +149,101 @@ func TestApiDerivationModifiersApplied(t *testing.T) {
 	}
 	if _, ok := back.Modifiers[0]["applied"]; !ok {
 		t.Errorf("applied missing from JSON: %s", b)
+	}
+}
+
+// region: the zone, whether zone-wide, the covered venue cells and the
+// excluded cells, both sorted and never null.
+func TestApiDerivationModifiersRegion(t *testing.T) {
+	t.Cleanup(func() { derivationModifierSnapshot.Store(nil) })
+	start := time.Date(2026, 11, 15, 9, 0, 0, 0, time.UTC)
+	wide := wideLevelMod(5, []s2.CellID{adjCellA, adjCellA.Next()}, adjCellFar.Next(), adjCellFar)
+	wide.Start = start
+	venue := levelMod(modifierScope{PokemonID: 2}, 3, adjZoneA, cellSet(adjCellA))
+	venue.Start = start
+	storeModifierSnapshot([]*derivationModifier{wide, venue})
+	b, err := json.Marshal(GetApiDerivationModifiers(start))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var back struct {
+		Modifiers []struct {
+			ID     string         `json:"id"`
+			Region map[string]any `json:"region"`
+		} `json:"modifiers"`
+	}
+	if err := json.Unmarshal(b, &back); err != nil {
+		t.Fatal(err)
+	}
+	toks := func(cs ...s2.CellID) []any {
+		out := make([]any, len(cs))
+		for i, c := range cs {
+			out[i] = c.ToToken()
+		}
+		slices.SortFunc(out, func(a, b any) int { return strings.Compare(a.(string), b.(string)) })
+		return out
+	}
+	want := map[string]map[string]any{
+		"2026-11-15-level_offset-1-0-delta+5": {"zone": adjZoneA, "zone_wide": true,
+			"cells": toks(adjCellFar, adjCellFar.Next()), "excluded": toks(adjCellA, adjCellA.Next())},
+		"2026-11-15-level_offset-2-0-delta+3": {"zone": adjZoneA, "zone_wide": false,
+			"cells": toks(adjCellA), "excluded": []any{}},
+	}
+	if len(back.Modifiers) != len(want) {
+		t.Fatalf("modifiers %s", b)
+	}
+	for _, m := range back.Modifiers {
+		if !reflect.DeepEqual(m.Region, want[m.ID]) {
+			t.Errorf("%s region %v, want %v", m.ID, m.Region, want[m.ID])
+		}
+	}
+}
+
+// Two strong species at the same level offset in one zone are summarised as
+// one all-strong entry, never applied; it goes when one of them ends.
+func TestApiDerivationModifiersAllStrongSummary(t *testing.T) {
+	t.Cleanup(func() { derivationModifierSnapshot.Store(nil) })
+	start := time.Date(2026, 11, 15, 9, 0, 0, 0, time.UTC)
+	mk := func(species int32, delta int32, status modifierStatus, strong bool, at time.Time) *derivationModifier {
+		m := levelMod(modifierScope{PokemonID: species, Strong: strong}, delta, adjZoneA, cellSet(adjCellA))
+		m.Status, m.Start, m.Observations = status, at, 10
+		return m
+	}
+	a := mk(1, 5, modConfirmed, true, start.Add(time.Hour))
+	b := mk(2, 5, modCandidate, true, start)
+	others := []*derivationModifier{
+		mk(3, 3, modConfirmed, true, start),  // another delta
+		mk(4, 5, modConfirmed, false, start), // not strong
+	}
+	summary := func() []ApiDerivationModifier {
+		var out []ApiDerivationModifier
+		for _, m := range GetApiDerivationModifiers(start).Modifiers {
+			if m.Scope.Pokemon == nil {
+				out = append(out, m)
+			}
+		}
+		return out
+	}
+
+	storeModifierSnapshot(append([]*derivationModifier{a, b}, others...))
+	got := summary()
+	if len(got) != 1 {
+		t.Fatalf("summaries %+v, want one", got)
+	}
+	s := got[0]
+	if s.ID != "2026-11-15-level_offset-all-strong-delta+5" || s.Applied || !s.Scope.Strong ||
+		s.Status != "candidate" || s.Evidence.Observations != 20 || s.Region.Zone != adjZoneA {
+		t.Errorf("summary %+v, want all-strong +5 candidate (one confirmed member), 20 observations, not applied", s)
+	}
+
+	b.Status = modConfirmed
+	storeModifierSnapshot(append([]*derivationModifier{a, b}, others...))
+	if got := summary(); len(got) != 1 || got[0].Status != "confirmed" {
+		t.Errorf("summaries %+v, want one confirmed (two confirmed members)", got)
+	}
+
+	storeModifierSnapshot(append([]*derivationModifier{a}, others...))
+	if got := summary(); len(got) != 0 {
+		t.Errorf("summaries %+v after one member ended, want none", got)
 	}
 }

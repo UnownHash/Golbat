@@ -87,7 +87,7 @@ func registerStatusRoutes(api huma.API) {
 		Method:        http.MethodGet,
 		Path:          "/api/derivation/modifiers",
 		Summary:       "List the active derivation modifiers",
-		Description:   "Lists the encounter-derivation modifiers the learner currently holds (candidate and confirmed), in the shareable modifiers format with a region. Returns version 1 and an empty modifiers array when the learner is off (see features.derivation_modifiers on /api/status).",
+		Description:   "Lists the encounter-derivation modifiers the learner currently holds (candidate and confirmed) and all-strong summaries, in the shareable modifiers format with a region (zone-wide less excluded cells, and covered venue cells). Returns version 1 and an empty modifiers array when the learner is off (see features.derivation_modifiers on /api/status).",
 		Tags:          []string{"Status"},
 		Security:      []map[string][]string{{securitySchemeName: {}}},
 		DefaultStatus: http.StatusOK,

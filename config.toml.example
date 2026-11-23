@@ -76,19 +76,23 @@ dir = "logs"
 bucket_minutes = 15
 retain_days = 14
 
-# derivation_modifiers: opt-in, needs derive_iv. Learns event modifiers (a level offset, a forced
-# move, moved size cuts, or an unexplained mismatch) from live encounter checks, per timezone, and
-# applies confirmed ones to derived values. start deviations within window_seconds open a candidate.
-# It covers its whole timezone while its effect is more than half of the zone's last 16 checks (at
-# least confirm of them, with matches under two ~10 km level-10 cells, the latest within
-# unseen_seconds), less the cells whose last check showed something else; and it covers a ~1 km (level-14 S2) venue cell after two matches there, until one check
-# there agrees or shows another effect. It is confirmed with confirm deviations once it covers
-# something (a candidate not confirmed within unseen_seconds ends), and ends when it covers nothing,
-# or when its species is not seen where it covers for unseen_seconds. Under sampled encounters (Dragonite's hourly minimum of 12) a zone-wide event that
-# ends on the hour stops applying within the next hour. start and confirm are at most 16. An
-# all-strong level offset is never applied; where two confirmed modifiers of one type and slot cover
-# a record, that value is withheld. Transitions are logged as [DERIVE_MODIFIER]; state is in memory
-# only (a restart relearns). Enabling it reserves ~1 MB for the event queue.
+# derivation_modifiers: opt-in, needs derive_iv. Learns event modifiers (a level offset, a
+# forced move, moved size cuts, or an unexplained mismatch) from live encounter checks, per
+# timezone, and applies confirmed ones to derived values. start deviations within window_seconds
+# open a candidate. It covers its whole timezone while its effect is more than half of the zone's
+# last 16 located checks (at least confirm of them, matches under two ~10 km level-10 S2 cells),
+# less the cells whose latest check showed something else; zone-wide lapses after unseen_seconds
+# with no located check. It covers a ~1 km (level-14) venue cell after two matches there, until
+# one check there agrees or shows another effect, or unseen_seconds pass without a match there.
+# It is confirmed with confirm matches while zone-wide, or confirm matches inside its covered
+# venue cells; a candidate not confirmed within unseen_seconds of its start ends. A confirmed
+# modifier ends when it covers nothing. Sightings do not keep it alive. Under sampled encounters
+# (Dragonite's hourly minimum of 12) a zone-wide event that ends on the hour stops applying
+# within the next hour. start <= confirm <= 16; end and zone_wide_cells are no longer used
+# (ignored with a warning). Two or more strong species at one level offset in a zone are listed
+# as an all-strong summary, never applied; where two confirmed modifiers of one type and slot
+# cover a record, that value is withheld. Transitions are logged as [DERIVE_MODIFIER]; state is
+# in memory only (a restart relearns). Enabling it reserves ~1 MB for the event queue.
 [derivation_modifiers]
 enabled = false
 start = 3

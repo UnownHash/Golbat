@@ -1,6 +1,7 @@
 package decoder
 
 import (
+	"cmp"
 	"fmt"
 	"slices"
 	"strconv"
@@ -104,9 +105,14 @@ var derivationModifierLearnerOn bool
 // alongside derivationModifierLearnerOn.
 var derivationModifierRuntime *modifierRuntime
 
-// derivationModifierSnapshot holds copies of the active (candidate and
-// confirmed) modifiers, refreshed with the index; nil = none.
-var derivationModifierSnapshot atomic.Pointer[[]*derivationModifier]
+// modifierSnapshot is what the API lists: copies of the active (candidate
+// and confirmed) modifiers and the all-strong summaries derived from them.
+type modifierSnapshot struct {
+	active, summaries []*derivationModifier
+}
+
+// derivationModifierSnapshot is refreshed with the index; nil = none.
+var derivationModifierSnapshot atomic.Pointer[modifierSnapshot]
 
 var deriveModifierDrops util.DropReporter
 
@@ -114,9 +120,83 @@ var deriveModifierDrops util.DropReporter
 // transition. The modifiers are shared and must not be modified.
 func activeDerivationModifiers() []*derivationModifier {
 	if p := derivationModifierSnapshot.Load(); p != nil {
-		return *p
+		return p.active
 	}
 	return nil
+}
+
+// storeModifierSnapshot publishes the API snapshot of active (published
+// copies) with its all-strong summaries.
+func storeModifierSnapshot(active []*derivationModifier) {
+	if len(active) == 0 {
+		derivationModifierSnapshot.Store(nil)
+		return
+	}
+	derivationModifierSnapshot.Store(&modifierSnapshot{active: active, summaries: allStrongSummaries(active)})
+}
+
+// allStrongSummaries reports, per zone and delta, the strong species-scope
+// level offsets active in two or more species as one all-strong level
+// offset (design §8): detection only, never in the index, never applied.
+// It is confirmed when at least two of its species are, else a candidate;
+// it starts at its earliest species' start, sums their evidence, and covers
+// what they cover together (zone-wide if one of them is, their covered
+// cells; no excluded cells). Sorted by zone, then delta.
+func allStrongSummaries(active []*derivationModifier) []*derivationModifier {
+	type key struct {
+		zone  string
+		delta int32
+	}
+	type group struct {
+		mods    []*derivationModifier
+		species map[modifierScope]struct{}
+	}
+	groups := map[key]*group{}
+	for _, m := range active {
+		if m.Type != modLevelOffset || m.Scope.AllStrong || !m.Scope.Strong {
+			continue
+		}
+		k := key{m.Zone, m.Effect.Delta}
+		g := groups[k]
+		if g == nil {
+			g = &group{species: map[modifierScope]struct{}{}}
+			groups[k] = g
+		}
+		g.mods = append(g.mods, m)
+		g.species[m.Scope] = struct{}{}
+	}
+	var out []*derivationModifier
+	for k, g := range groups {
+		if len(g.species) < 2 {
+			continue
+		}
+		s := &derivationModifier{Type: modLevelOffset, Scope: allStrongScope,
+			Effect: modifierEffect{Delta: k.delta}, Zone: k.zone, Status: modCandidate,
+			Cells: map[s2.CellID]struct{}{}}
+		confirmed := 0
+		for i, m := range g.mods {
+			if i == 0 || m.Start.Before(s.Start) {
+				s.Start = m.Start
+			}
+			if m.Status == modConfirmed {
+				confirmed++
+			}
+			s.Observations += m.Observations
+			s.Contradictions += m.Contradictions
+			s.ZoneWide = s.ZoneWide || m.ZoneWide
+			for c := range m.Cells {
+				s.Cells[c] = struct{}{}
+			}
+		}
+		if confirmed >= 2 {
+			s.Status = modConfirmed
+		}
+		out = append(out, s)
+	}
+	slices.SortFunc(out, func(a, b *derivationModifier) int {
+		return cmp.Or(strings.Compare(a.Zone, b.Zone), cmp.Compare(a.Effect.Delta, b.Effect.Delta))
+	})
+	return out
 }
 
 // modifierParamsFromConfig converts the config's thresholds, rejecting
@@ -273,17 +353,14 @@ func (r *modifierRuntime) publish(trs []modifierTransition) {
 	r.evidencePending, r.lastPublish = false, r.clock()
 	active := r.activeCopies()
 	derivationModifierIndex.Store(buildModifierIndex(active))
-	if len(active) == 0 {
-		derivationModifierSnapshot.Store(nil)
-	} else {
-		derivationModifierSnapshot.Store(&active)
-	}
+	storeModifierSnapshot(active)
 }
 
 // activeCopies returns published copies of the learner's active modifiers,
 // reusing the previous copy of each modifier whose version is unchanged
 // (copies are immutable once published; the index and the snapshot share
-// them) and forgetting the modifiers no longer active.
+// them), and a changed modifier's previous cell set when its cells are
+// unchanged, and forgetting the modifiers no longer active.
 func (r *modifierRuntime) activeCopies() []*derivationModifier {
 	tracks := r.learner.activeTracks
 	out := make([]*derivationModifier, 0, len(tracks))
@@ -292,7 +369,7 @@ func (r *modifierRuntime) activeCopies() []*derivationModifier {
 		m := t.mod
 		p, ok := r.published[m]
 		if !ok || p.version != m.version {
-			p = publishedModifier{version: m.version, mod: m.clone()}
+			p = publishedModifier{version: m.version, mod: m.cloneSharing(p.mod)}
 			r.clones++
 		}
 		next[m] = p

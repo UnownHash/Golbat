@@ -2,6 +2,7 @@ package decoder
 
 import (
 	"context"
+	"slices"
 	"testing"
 
 	"golbat/db"
@@ -616,5 +617,96 @@ func TestUpdateFromWildDerivesWithThePlacedCell(t *testing.T) {
 	absent.updateFromWild(context.Background(), db.DbDetails{}, wild(pogo.GameplayWeatherProto_NONE), cellB15, nil, 1700000000000, "t")
 	if want := encounter.Derive(adjEid, false, false, 0).Level; int32(absent.Level.ValueOrZero()) != want {
 		t.Errorf("derive into B: level = %v, want base %d (no modifier in B)", absent.Level, want)
+	}
+}
+
+// wideLevelMod is a confirmed zone-wide level offset for species 1 in
+// adjZoneA, less excluded, plus the covered venue cells.
+func wideLevelMod(delta int32, excluded []s2.CellID, cells ...s2.CellID) *derivationModifier {
+	return &derivationModifier{Type: modLevelOffset, Scope: modifierScope{PokemonID: 1},
+		Effect: modifierEffect{Delta: delta}, Zone: adjZoneA, Status: modConfirmed,
+		ZoneWide: true, Excluded: excluded, Cells: cellSet(cells...)}
+}
+
+// A zone-wide modifier covers its zone less its excluded cells; a covered
+// venue cell is covered even when excluded.
+func TestDerivationAdjustZoneWideExcludedCell(t *testing.T) {
+	excl := adjCellA.Next()
+	idx := buildModifierIndex([]*derivationModifier{wideLevelMod(5, []s2.CellID{adjCellA, excl}, adjCellA)})
+	for _, c := range []struct {
+		name string
+		cell s2.CellID
+		want int32
+	}{
+		{"zone cell", adjCellFar, 5},
+		{"excluded cell", excl, 0},
+		{"excluded but covered venue cell", adjCellA, 5},
+		{"other zone", adjCellB, 0},
+		{"unknown cell", 0, 0},
+	} {
+		if adj := idx.lookup(1, 0, false, c.cell, modifierZoneOf); adj.LevelDelta != c.want {
+			t.Errorf("%s: delta %d, want %d", c.name, adj.LevelDelta, c.want)
+		}
+	}
+}
+
+// A venue-only modifier covers its covered cells and nothing else in its
+// zone; the lookup never resolves the zone for it.
+func TestDerivationAdjustVenueCoveredOnly(t *testing.T) {
+	m := levelMod(modifierScope{PokemonID: 1}, 5, adjZoneA, cellSet(adjCellA))
+	idx := buildModifierIndex([]*derivationModifier{m})
+	zoneOf := func(s2.CellID) string { t.Error("zoneOf called for a venue-only modifier"); return adjZoneA }
+	if adj := idx.lookup(1, 0, false, adjCellA, zoneOf); adj.LevelDelta != 5 {
+		t.Errorf("covered cell: delta %d, want 5", adj.LevelDelta)
+	}
+	if adj := idx.lookup(1, 0, false, adjCellA.Next(), zoneOf); adj.LevelDelta != 0 {
+		t.Errorf("uncovered cell: delta %d, want 0", adj.LevelDelta)
+	}
+}
+
+// Two pins disputing a cell are withheld; a cell excluded from the zone-wide
+// one is the venue pin's alone.
+func TestDerivationAdjustZoneWideConflictHonoursExcluded(t *testing.T) {
+	wide := &derivationModifier{Type: modMovePin, Scope: modifierScope{PokemonID: 1},
+		Effect: modifierEffect{Slot: modSlotCharged, Move: 494}, Zone: adjZoneA, Status: modConfirmed,
+		ZoneWide: true, Excluded: []s2.CellID{adjCellA.Next()}, Cells: cellSet()}
+	venue := &derivationModifier{Type: modMovePin, Scope: modifierScope{PokemonID: 1},
+		Effect: modifierEffect{Slot: modSlotCharged, Move: 300}, Zone: adjZoneA, Status: modConfirmed,
+		Cells: cellSet(adjCellA, adjCellA.Next())}
+	idx := buildModifierIndex([]*derivationModifier{wide, venue})
+	if adj := idx.lookup(1, 0, false, adjCellA, modifierZoneOf); !adj.WithholdCharged || adj.Charged != 0 {
+		t.Errorf("disputed cell: %+v, want charged withheld", adj)
+	}
+	if adj := idx.lookup(1, 0, false, adjCellA.Next(), modifierZoneOf); adj.WithholdCharged || adj.Charged != 300 {
+		t.Errorf("excluded from the zone-wide pin: %+v, want the venue pin 300", adj)
+	}
+	if adj := idx.lookup(1, 0, false, adjCellFar, modifierZoneOf); adj.Charged != 494 {
+		t.Errorf("zone cell: %+v, want the zone-wide pin 494", adj)
+	}
+}
+
+func TestDerivationAdjustZoneWideNoAllocs(t *testing.T) {
+	excluded := make([]s2.CellID, 0, 16)
+	for c := adjCellA.Next(); len(excluded) < 15; c = c.Next() {
+		excluded = append(excluded, c)
+	}
+	excluded = append(excluded, adjCellA)
+	slices.Sort(excluded)
+	withModifierIndex(t, wideLevelMod(5, excluded, adjCellFar.Next()))
+	for _, c := range []struct {
+		name     string
+		lat, lon float64
+		want     int32
+	}{
+		{"excluded", adjLatA, adjLonA, 0},
+		{"zone", adjLatA + 0.2, adjLonA, 5},
+	} {
+		p := adjRecord(1, c.lat, c.lon, false)
+		if got := p.modifierAdjust().LevelDelta; got != c.want {
+			t.Fatalf("%s: delta %d, want %d", c.name, got, c.want)
+		}
+		if n := testing.AllocsPerRun(100, func() { _ = p.modifierAdjust() }); n != 0 {
+			t.Errorf("%s: %v allocs, want 0", c.name, n)
+		}
 	}
 }
