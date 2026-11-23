@@ -79,12 +79,16 @@ retain_days = 14
 # derivation_modifiers: opt-in, needs derive_iv. Learns event modifiers (a level offset, a
 # forced move, moved size cuts, or an unexplained mismatch) from live encounter checks, per
 # timezone, and applies confirmed zone-wide ones to derived values. start deviations within
-# window_seconds open a candidate. It is zone-wide while its effect is more than half of the
-# zone's last 16 located checks no older than unseen_seconds (at least confirm of them, matches
-# from 8+ level-14 S2 cells with two 10+ km apart; a confirmed one stays on with start of each),
-# less the cells whose latest check showed something else, until a match there (at most 256;
-# one more ends it). It is confirmed with confirm matches while zone-wide; a candidate not
-# confirmed within 2 x unseen_seconds ends, and a confirmed one ends when it is not zone-wide.
+# window_seconds open a candidate. It turns zone-wide when its effect is at least three quarters
+# of the zone's last 16 located checks no older than unseen_seconds (at least confirm of them,
+# matches from 8+ level-14 S2 cells with two 10+ km apart); a confirmed one stays on with more
+# than half of at least start checks, matches from min(start, 8) cells. It covers the zone less
+# the cells whose latest check showed something else, until a match there (at most 256, or 1% of
+# the cells seen in the zone, up to 4096; one more ends it). It is confirmed with confirm matches
+# while zone-wide; a candidate not confirmed within 2 x unseen_seconds ends, and a confirmed one
+# ends when it is not zone-wide. Two base results running pause it until its next match: what it
+# changes (level and IVs, a move slot, or size) is then left empty, not derived at the base
+# value. Each moved size cut is its own modifier.
 # Venue cells (two matches in one ~1 km level-14 cell) are listed as evidence, never applied: a
 # venue-only modifier never confirms. A scan area under 10 km across never applies one.
 # Sightings do not keep it alive. start <= confirm <= 16; end and zone_wide_cells are no longer

@@ -11,25 +11,29 @@ import (
 	"golbat/tz"
 )
 
-// Applying confirmed derivation modifiers (design §5–7, §9). The learner
+// Applying confirmed derivation modifiers (design §5–7, §9–§10). The learner
 // publishes an immutable modifierIndex behind derivationModifierIndex; the
 // derive path loads it once per derivation and, only when the record's
 // (species, form, strong) has an applied modifier, resolves the record's
 // level-14 cell and, unless every entry excludes it, the cell's zone. Only
 // zone-wide coverage is applied: venue cells are detection evidence, never
-// applied. With no modifier (nil index) a derivation costs one atomic load.
+// applied. A paused modifier withholds its dimension where it covers. With
+// no modifier (nil index) a derivation costs one atomic load.
 
 // derivationModifierIndex holds the active modifiers; nil = none.
 var derivationModifierIndex atomic.Pointer[modifierIndex]
 
-// modifierEntry is one applied modifier as the derive path matches it: it
-// covers a record anywhere in its zone except its excluded cells.
+// modifierEntry is one confirmed zone-wide modifier as the derive path
+// matches it: it covers a record anywhere in its zone except its excluded
+// cells. Paused, it withholds its dimension there instead of applying.
 type modifierEntry struct {
 	typ      modifierType
 	effect   modifierEffect
-	size     map[string]sizeBoundary // size_cutoffs; shared, never modified
+	interval sizeBoundary // size_cutoffs: where the moved cut lies
+	cut      int8         // size_cutoffs: its index in the scope's cut list
+	paused   bool
 	zone     string
-	excluded map[s2.CellID]uint8 // ≤ modExcludedMax; shared, never modified
+	excluded map[s2.CellID]struct{} // ≤ modExcludedMax; shared, never modified
 }
 
 // covers reports whether e covers a record in cell, resolving the cell's
@@ -49,7 +53,8 @@ func (e *modifierEntry) covers(cell s2.CellID, zone *string, zoneKnown *bool,
 // modifierIndex is an immutable snapshot of the learner's active modifiers.
 type modifierIndex struct {
 	// confirmed is keyed by species scope (PokemonID, Form, Strong): the
-	// modifiers the derive path applies (modifierApplied).
+	// modifiers the derive path applies or, paused, withholds for
+	// (modifierIndexed).
 	confirmed map[modifierScope][]modifierEntry
 	// active holds the species scopes with a zone-wide candidate or
 	// confirmed modifier: their first sightings feed its last-seen time.
@@ -58,13 +63,20 @@ type modifierIndex struct {
 	active map[modifierScope]struct{}
 }
 
-// modifierApplied reports whether the derive path applies m: confirmed,
+// modifierIndexed reports whether the derive path looks m up: confirmed,
 // zone-wide and not all-strong. A modifier with venue cells only is
 // detection evidence (design §9); the learner ends a confirmed one as soon
 // as it is not zone-wide. An all-strong level offset is detected and listed
 // only: a strong species at base levels kept getting it.
-func modifierApplied(m *derivationModifier) bool {
+func modifierIndexed(m *derivationModifier) bool {
 	return m.Status == modConfirmed && m.ZoneWide && !m.Scope.AllStrong
+}
+
+// modifierApplied reports whether the derive path applies m's value: it is
+// indexed and not paused. A paused one is still looked up, to withhold its
+// dimension (design §10).
+func modifierApplied(m *derivationModifier) bool {
+	return modifierIndexed(m) && !m.Paused
 }
 
 // buildModifierIndex builds the index from the learner's active modifiers
@@ -84,11 +96,19 @@ func buildModifierIndex(mods []*derivationModifier) *modifierIndex {
 		if m.ZoneWide {
 			idx.active[m.Scope] = struct{}{}
 		}
-		if !modifierApplied(m) {
+		if !modifierIndexed(m) {
 			continue
 		}
-		e := modifierEntry{typ: m.Type, effect: m.Effect, size: m.Boundaries, zone: m.Zone,
-			excluded: m.Excluded}
+		e := modifierEntry{typ: m.Type, effect: m.Effect, interval: m.Interval, paused: m.Paused,
+			zone: m.Zone, excluded: m.Excluded}
+		if m.Type == modSizeCutoffs {
+			// A boundary the scope's cut list does not have classifies nothing.
+			i := sizeCutIndex(m.Scope.Strong, m.Effect.Cut)
+			if i < 0 {
+				continue
+			}
+			e.cut = int8(i)
+		}
 		idx.confirmed[m.Scope] = append(idx.confirmed[m.Scope], e)
 	}
 	if len(idx.confirmed) == 0 && len(idx.active) == 0 {
@@ -107,17 +127,32 @@ func (idx *modifierIndex) wantsSighting(pokemonID, form int32, strong bool) bool
 	return ok
 }
 
-// derivationAdjust is what applied modifiers change in one derivation. The
-// zero value changes nothing.
+// derivationAdjust is what the modifiers covering a record change in one
+// derivation. The zero value changes nothing.
 type derivationAdjust struct {
-	Suppress       bool // unexplained: derive nothing
+	// Suppress: derive nothing (unexplained, or a paused level offset: the
+	// level is neither the event's nor the base one, and nothing is derived
+	// without a level).
+	Suppress       bool
 	LevelDelta     int32
-	Quick, Charged int32                   // 0 = no pin
-	Size           map[string]sizeBoundary // nil = base cuts
+	Quick, Charged int32 // 0 = no pin
+	// NoQuick, NoCharged, NoSize: a paused modifier covers the record, so
+	// the move slot or the size is left absent: its value is not applied,
+	// and the base value is not derived in its place.
+	NoQuick, NoCharged, NoSize bool
+	// size holds the applied boundaries' intervals by index in the walk's
+	// cut list; bit i of sizeSet is set for those present. The other cuts
+	// are the base ones.
+	size    [modSizeCutsMax]sizeBoundary
+	sizeSet uint8
 	// strong is the walk the adjustment was looked up for, the cut list
-	// Size is read against.
+	// size is read against.
 	strong bool
 }
+
+// adjustsSize reports whether a changes the size: a moved cut or a withheld
+// size.
+func (a *derivationAdjust) adjustsSize() bool { return a.NoSize || a.sizeSet != 0 }
 
 // has reports whether the scope has an applied modifier: the only work
 // done before a key matches.
@@ -125,14 +160,18 @@ func (idx *modifierIndex) has(pokemonID, form int32, strong bool) bool {
 	return len(idx.confirmed[modifierScope{PokemonID: pokemonID, Form: form, Strong: strong}]) > 0
 }
 
-// lookup combines the applied modifiers covering a record of the scope in
+// lookup combines the indexed modifiers covering a record of the scope in
 // cell: one matches a cell it has not excluded in its zone, calling
 // zoneOf(cell) at most once per lookup. Unexplained suppresses everything;
-// the other types combine. Two covering modifiers never dispute a value:
-// a record's zone is one, and in one zone two modifiers of one scope, type
-// and slot cannot both hold the zone record's majority, which zone-wide
-// needs (and the runtime publishes one learner state at a time). It does
-// not allocate.
+// the other types combine, each size boundary on its own cut (a boundary
+// that does not cover the cell leaves its cut the base one; sizeClass
+// withholds the size when the two do not fit together). A paused modifier
+// withholds its dimension instead: a level offset everything, a pin its
+// slot, a size boundary the size. Two covering modifiers never dispute a
+// value: a record's zone is one, and in one zone two modifiers of one
+// scope, type and slot (or size boundary) cannot both hold their zone
+// record's share, which zone-wide needs (and the runtime publishes one
+// learner state at a time). It does not allocate.
 func (idx *modifierIndex) lookup(pokemonID, form int32, strong bool, cell s2.CellID,
 	zoneOf func(s2.CellID) string) derivationAdjust {
 	entries := idx.confirmed[modifierScope{PokemonID: pokemonID, Form: form, Strong: strong}]
@@ -151,17 +190,27 @@ func (idx *modifierIndex) lookup(pokemonID, form int32, strong bool, cell s2.Cel
 		case modUnexplained:
 			return derivationAdjust{Suppress: true, strong: strong}
 		case modLevelOffset:
+			if e.paused {
+				return derivationAdjust{Suppress: true, strong: strong}
+			}
 			adj.LevelDelta = e.effect.Delta
 		case modMovePin:
-			switch e.effect.Slot {
-			case modSlotQuick:
+			switch {
+			case e.effect.Slot == modSlotQuick && e.paused:
+				adj.NoQuick = true
+			case e.effect.Slot == modSlotQuick:
 				adj.Quick = e.effect.Move
-			case modSlotCharged:
+			case e.effect.Slot == modSlotCharged && e.paused:
+				adj.NoCharged = true
+			case e.effect.Slot == modSlotCharged:
 				adj.Charged = e.effect.Move
 			}
 		case modSizeCutoffs:
-			if len(e.size) > 0 {
-				adj.Size = e.size
+			if e.paused {
+				adj.NoSize = true
+			} else {
+				adj.size[e.cut] = e.interval
+				adj.sizeSet |= 1 << e.cut
 			}
 		}
 	}
@@ -235,34 +284,55 @@ func (a derivationAdjust) level(derived int32) int32 {
 	return min(max(derived+a.LevelDelta, 1), 50)
 }
 
-// sizeClass classifies roll with the moved cuts: each listed boundary's cut
-// is replaced by its interval, below Lo the lower class, at or above Hi the
-// upper, inside it no class (false: leave size absent). A form whose size
-// is fixed keeps base.
+// sizeClass classifies roll with the moved cuts: each applied boundary's
+// cut is replaced by its interval, below Lo the lower class, at or above Hi
+// the upper, inside it no class (false: leave size absent). An interval
+// with no Lo starts at the cut before it; one with no Hi leaves every roll
+// from its Lo up absent. The cuts must still be in order: when an applied
+// interval passes a neighbouring cut (a base one where that boundary does
+// not cover the record, or another interval), the two were learned apart
+// and do not describe one set of cuts, so no roll gets a class. A withheld
+// size is absent; a form whose size is fixed keeps base. It does not
+// allocate.
 func (a derivationAdjust) sizeClass(roll float64, strong bool, form int32, base int32) (int32, bool) {
 	if encounter.FormFixesSize(form) {
 		return base, true
 	}
+	if a.NoSize {
+		return 0, false
+	}
 	cuts := sizeCuts(strong)
-	for _, c := range cuts {
+	class, ok, done := int32(cuts[len(cuts)-1].below)+1, true, false
+	floor := math.Inf(-1) // the end of the cut before
+	for i, c := range cuts {
 		lo, hi := c.at, c.at
-		if b, ok := a.Size[c.name]; ok {
-			lo, hi = math.Inf(-1), math.Inf(1)
+		if a.sizeSet&(1<<i) != 0 {
+			b := a.size[i]
+			lo, hi = floor, math.Inf(1)
 			if b.HasLo {
-				lo = b.Lo
+				if lo = b.Lo; lo < floor {
+					return 0, false
+				}
 			}
 			if b.HasHi {
-				hi = b.Hi
+				if hi = b.Hi; hi < floor {
+					return 0, false
+				}
 			}
-		}
-		// Learned boundaries always have Lo < Hi (sizeEvidence never holds an
-		// empty interval), so the two tests below cannot overlap.
-		if roll < lo {
-			return int32(c.below), true
-		}
-		if roll < hi {
+		} else if lo < floor {
 			return 0, false
 		}
+		// Learned intervals always have Lo < Hi (fit refuses the roll that
+		// would empty one), so the two tests below cannot overlap.
+		if !done && roll < lo {
+			class, ok, done = int32(c.below), true, true
+		} else if !done && roll < hi {
+			class, ok, done = 0, false, true
+		}
+		if math.IsInf(hi, 1) {
+			break // nothing is known above lo: every roll there is absent
+		}
+		floor = hi
 	}
-	return int32(cuts[len(cuts)-1].below) + 1, true
+	return class, ok
 }

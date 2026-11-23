@@ -161,26 +161,35 @@ func TestModifierZoneWideMatchesAge(t *testing.T) {
 	}
 }
 
-// sizeSpreadEvent returns a learner with a confirmed zone-wide Rattata size
-// modifier listing 1/2 = [0.008, 0.033] and 2/3 = [0.033, ..): XXS seen up
-// to 0.008 and XS up to 0.033, six of each over twelve cells ~55 km apart,
-// one roll every five minutes ending at end.
+// sizeSpreadEvent returns a learner with two confirmed zone-wide Rattata
+// size modifiers, 1/2 = [0.008, 0.010] and 2/3 = [0.033, ..): XXS seen up
+// to 0.008 and XS from 0.010 to 0.033, twelve of each over twelve cells
+// ~55 km apart, one roll every two minutes ending at end (the last an XS at
+// 0.010, which the base cuts give too).
 func sizeSpreadEvent(t *testing.T, end time.Time) *modifierLearner {
 	t.Helper()
 	l := newModifierLearner(defaultModifierParams())
 	cells := modSpreadCells(12)
-	for i := range 12 {
-		ts := end.Add(time.Duration(i-11) * 5 * time.Minute)
+	for i := range 24 {
+		ts := end.Add(time.Duration(i-23) * 2 * time.Minute)
 		opt := withSize(0.008, 1)
 		if i%2 == 1 {
 			opt = withSize(0.033, 2)
 		}
-		l.feed(modCheck(ts, cells[i], opt), modZone)
+		l.feed(modCheck(ts, cells[i/2], opt), modZone)
 	}
-	m := onlyActive(t, l)
-	if m.Type != modSizeCutoffs || m.Status != modConfirmed || !m.ZoneWide || len(m.Boundaries) != 2 {
-		t.Fatalf("modifier %v %v zone-wide %v boundaries %v, want a confirmed zone-wide size modifier with 1/2 and 2/3",
-			m.Type, m.Status, m.ZoneWide, m.Boundaries)
+	l.feed(modCheck(end, cells[0], withSize(0.010, 2)), modZone)
+	for cut, want := range map[string]sizeBoundary{
+		"1/2": {Lo: 0.008, Hi: 0.010, HasLo: true, HasHi: true},
+		"2/3": {Lo: 0.033, HasLo: true},
+	} {
+		m := sizeActive(l, cut)
+		if m == nil || m.Status != modConfirmed || !m.ZoneWide || m.Interval != want {
+			t.Fatalf("boundary %s: %+v, want confirmed zone-wide %+v", cut, m, want)
+		}
+	}
+	if n := len(l.active()); n != 2 {
+		t.Fatalf("%d active modifiers, want the two boundaries", n)
 	}
 	return l
 }
@@ -202,43 +211,98 @@ func TestModifierSizeEndsAfterEventWithSparseBaseRolls(t *testing.T) {
 		trs = append(trs, l.feed(modCheck(ts.Add(2*time.Second), unseenCell, withSize(0.5, 3), asSighting), modZone)...)
 		trs = append(trs, l.sweep(ts.Add(3*time.Second))...)
 		for _, tr := range trs {
-			if tr.State == modEnded && ended.IsZero() {
-				ended = ts
+			if tr.State == modEnded && tr.Mod.Status == modEnded && tr.Mod.EndReason != "unconfirmed" {
+				ended = ts // the later of the two boundaries
 			}
 		}
 	}
 	if ended.IsZero() || ended.After(modT0.Add(62*time.Minute)) {
-		t.Fatalf("size modifier ended at %v, want within unseen of its last match at %v", ended, modT0)
+		t.Fatalf("last size modifier ended at %v, want within unseen of its last match at %v", ended, modT0)
 	}
 	for _, m := range l.active() {
 		if m.Status == modConfirmed {
-			t.Fatalf("a confirmed size modifier is still published two hours after the event: %v", m.Boundaries)
+			t.Fatalf("a confirmed size modifier is still published two hours after the event: %s %+v", m.Effect.Cut, m.Interval)
 		}
 	}
 }
 
-// Size exclusion is per boundary: a cell where 2/3 was disproved is not
-// readmitted by a match across 1/2 there, only by one across 2/3.
-func TestModifierSizeReadmissionPerBoundary(t *testing.T) {
+// Codex round 4 (c): a cell excluded from a boundary keeps its disproving
+// roll and is readmitted only by a roll there that contradicts it. With the
+// zone-wide 2/3 cut at 0.033 or above, an M at 0.032 in cell D disproves it
+// there. An XS at 0.030 is a match, but both rolls fit a cut at 0.031 local
+// to D, so D stays excluded (it was readmitted, and 0.032 there made XS).
+// An XS at or above 0.032 contradicts the M and readmits D. A match across
+// another boundary says nothing: that is another modifier.
+func TestModifierSizeReadmissionNeedsResolvingRoll(t *testing.T) {
 	l := sizeSpreadEvent(t, modT0)
 	ts := modT0
 	feed := func(roll float64, obs uint8) {
+		t.Helper()
 		ts = ts.Add(time.Second)
 		if trs := l.feed(modCheck(ts, cellD, withSize(roll, obs)), modZone); len(trs) != 0 {
 			t.Fatalf("roll %v class %d: %v, want no transition", roll, obs, states(trs))
 		}
 	}
+	covers := func() bool { return sizeActive(l, "2/3").Covers(modZone, cellD) }
 	feed(0.032, 3) // an M under the moved 2/3 cut: the base cut holds in D
-	if onlyActive(t, l).Covers(modZone, cellD) {
+	if covers() {
 		t.Fatal("cell D covered after a base roll in the 2/3 band")
 	}
-	feed(0.008, 1) // a match across 1/2 says nothing about 2/3
-	if onlyActive(t, l).Covers(modZone, cellD) {
-		t.Fatal("a match across 1/2 readmitted cell D, where 2/3 was disproved: a 0.032 roll there would be made XS")
+	if got, ok := sizeIndexClass(l, cellD, 0.032); !ok || got != 3 {
+		t.Fatalf("0.032 in D = (%d, %v), want the base class 3", got, ok)
 	}
-	feed(0.033, 2)
-	if !onlyActive(t, l).Covers(modZone, cellD) {
-		t.Fatal("a match across 2/3 did not readmit cell D")
+	feed(0.008, 1) // a match across 1/2 says nothing about 2/3
+	if covers() {
+		t.Fatal("a match across 1/2 readmitted cell D for 2/3")
+	}
+	feed(0.030, 2) // a match across 2/3, on the near side of the disproving roll
+	if covers() {
+		t.Fatal("an XS at 0.030 readmitted cell D: with the M at 0.032 it fits a local cut at 0.031, and 0.032 there would be made XS")
+	}
+	if got, ok := sizeIndexClass(l, cellD, 0.032); !ok || got != 3 {
+		t.Fatalf("0.032 in D after the 0.030 XS = (%d, %v), want the base class 3", got, ok)
+	}
+	if !sizeActive(l, "1/2").Covers(modZone, cellD) {
+		t.Fatal("the 2/3 disproof excluded cell D from 1/2")
+	}
+	feed(0.0325, 2) // an XS above the disproving M: the M is contradicted
+	if !covers() {
+		t.Fatal("an XS at 0.0325, above the disproving 0.032, did not readmit cell D")
+	}
+	if got, ok := sizeIndexClass(l, cellD, 0.032); !ok || got != 2 {
+		t.Fatalf("0.032 in D once readmitted = (%d, %v), want 2", got, ok)
+	}
+}
+
+// Codex round 4 (a): boundaries age apart. With both confirmed zone-wide,
+// rolls across 1/2 keep arriving and none across 2/3: 2/3 ends within
+// unseen of its last roll (it stayed listed for 90 minutes, on the shared
+// record's freshness) and 1/2 goes on.
+func TestModifierSizeBoundaryAgesIndependently(t *testing.T) {
+	l := sizeSpreadEvent(t, modT0) // the last 2/3 roll is at modT0
+	cells := modSpreadCells(12)
+	var ended time.Time
+	for min := 1; min <= 90; min++ {
+		ts := modT0.Add(time.Duration(min) * time.Minute)
+		trs := l.feed(modCheck(ts, cells[min%12], withSize(0.008, 1)), modZone)
+		for _, tr := range append(trs, l.sweep(ts.Add(time.Second))...) {
+			if tr.State != modEnded || tr.Mod.Effect.Cut != "2/3" || tr.Mod.EndReason != "unseen" {
+				t.Fatalf("+%dm: %v %s %s, want only 2/3 ending unseen", min, tr.State, tr.Mod.Effect.Cut, tr.Mod.EndReason)
+			}
+			ended = ts
+		}
+		if min == 30 && sizeActive(l, "2/3") == nil {
+			t.Fatal("2/3 ended half an hour after its last roll")
+		}
+	}
+	if ended.IsZero() || ended.After(modT0.Add(62*time.Minute)) {
+		t.Fatalf("2/3 ended at %v, want within unseen of its last roll at %v", ended, modT0)
+	}
+	if m := sizeActive(l, "1/2"); m == nil || m.Status != modConfirmed || !m.ZoneWide {
+		t.Fatalf("1/2 = %+v, want it still confirmed zone-wide", m)
+	}
+	if got, ok := sizeIndexClass(l, cells[0], 0.031); !ok || got != 3 {
+		t.Fatalf("0.031 after 2/3 ended = (%d, %v), want the base class 3", got, ok)
 	}
 }
 
@@ -366,7 +430,7 @@ func TestModifierOverflowedCandidateRestarts(t *testing.T) {
 		t.Fatalf("after %d disproving cells: %v, want ended unconfirmed at the 257th", n, states(trs))
 	}
 	trs = nil
-	for _, c := range modSpreadCells(10) {
+	for _, c := range modSpreadCells(12) { // three quarters of the record's 16
 		trs = append(trs, feed(c, withLevelDelta(5))...)
 	}
 	if len(trs) != 2 || trs[0].State != modCandidate || trs[1].State != modConfirmed {
@@ -389,22 +453,36 @@ func TestModifierVerdictByEffectSkipsNeutral(t *testing.T) {
 		r.push(cells[4+i], 300, false, 100)
 	}
 	r.push(cells[10], 494, true, 100) // the base walk gave the pinned move
-	if v := r.judge(494, true, modJudge{10, 8}, 100); v.on || !v.byEffect || v.lost() != "contradicted" {
+	if v := r.judge(494, true, modJudge{entries: 10, cells: 8}, 100); v.on || !v.byEffect || v.lost() != "contradicted" {
 		t.Fatalf("verdict %+v, want off by another effect", v)
 	}
 }
 
-// A refused size roll disproves only listed boundaries: one that is not
-// applied could never be matched across to readmit the cell.
-func TestModifierSizeRefusedBitsListedOnly(t *testing.T) {
-	var ev sizeEvidence
-	ev, _ = ev.with(1, 0.010)
-	cuts := sizeCuts(false)
-	listed := map[string]sizeBoundary{"1/2": {Lo: 0.010, HasLo: true}}
-	if got := ev.refusedBits(listed, 2, 0.003, cuts); got != 1 {
-		t.Fatalf("bits %04b, want boundary 1/2", got)
-	}
-	if got := ev.refusedBits(map[string]sizeBoundary{"3/4": {}}, 2, 0.003, cuts); got != 0 {
-		t.Fatalf("bits %04b for an unlisted boundary, want none", got)
+// A boundary's interval accepts a roll it holds with, and tells a roll it
+// refuses that the base cut classifies (contrary: an agreement) from one
+// the base cut refuses too (another effect).
+func TestModifierSizeIntervalFit(t *testing.T) {
+	cut := sizeCuts(false)[0] // 1/2 at 0.004
+	b := sizeBoundary{Lo: 0.010, Hi: 0.012, HasLo: true, HasHi: true}
+	for _, tc := range []struct {
+		cls     uint8
+		roll    float64
+		kind    sizeRollKind
+		want    sizeBoundary
+		changed bool
+	}{
+		{1, 0.009, sizeRollAccepted, b, false},
+		{1, 0.011, sizeRollAccepted, sizeBoundary{Lo: 0.011, Hi: 0.012, HasLo: true, HasHi: true}, true},
+		{2, 0.0115, sizeRollAccepted, sizeBoundary{Lo: 0.010, Hi: 0.0115, HasLo: true, HasHi: true}, true},
+		{3, 0.5, sizeRollAccepted, b, false},
+		{2, 0.006, sizeRollContrary, b, false}, // the base cut's XS, under the moved cut
+		{2, 0.003, sizeRollRefused, b, false},  // an XS under the base cut: moved down
+		{1, 0.02, sizeRollRefused, b, false},   // an XXS over the interval: moved further
+	} {
+		kind, next, changed := b.fit(cut, tc.cls, tc.roll)
+		if kind != tc.kind || next != tc.want || changed != tc.changed {
+			t.Errorf("class %d at %v: (%v, %+v, %v), want (%v, %+v, %v)", tc.cls, tc.roll,
+				kind, next, changed, tc.kind, tc.want, tc.changed)
+		}
 	}
 }

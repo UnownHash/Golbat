@@ -32,9 +32,9 @@ const (
 // unit vectors are that far apart when their dot product is at most this.
 var modSpreadMaxCos = math.Cos(modSpreadMinKm / modEarthRadiusKm)
 
-// Effect ids of the dimensions whose tracks have no effect key: an IV
-// mismatch, and for size a roll that supports the moved cuts or one the
-// interval fit refuses.
+// Effect ids of the dimensions whose tracks have no effect id: an IV
+// mismatch, and for a size boundary a roll that supports the moved cut or
+// one its interval refuses.
 const (
 	modIDMismatch  int32 = 1
 	modIDSizeMatch int32 = 1
@@ -58,18 +58,51 @@ type modRecEntry struct {
 	agree bool
 }
 
-type modRecord struct {
+// modRing is the last modRecordSize entries pushed, in push order.
+type modRing struct {
 	buf     [modRecordSize]modRecEntry
 	head, n uint8
-	last    int64 // unix time of the latest check, entered or not
 }
 
-func (r *modRecord) push(cell s2.CellID, id int32, agree bool, unix int64) {
-	r.buf[r.head] = modRecEntry{cell: cell, unix: unix, id: id, agree: agree}
+func (r *modRing) push(e modRecEntry) {
+	r.buf[r.head] = e
 	r.head = (r.head + 1) % modRecordSize
 	if r.n < modRecordSize {
 		r.n++
 	}
+}
+
+// at returns the i-th newest entry, 1 ≤ i ≤ r.n.
+func (r *modRing) at(i int) modRecEntry {
+	return r.buf[(int(r.head)-i+modRecordSize)%modRecordSize]
+}
+
+type modRecord struct {
+	modRing
+	last int64 // unix time of the latest check, entered or not
+	// pinEqual holds the move agreements that were neutral for a pin with a
+	// modifier when seen (pushPinEqual), nil until the first. They say
+	// nothing about that pin, so they must not push its evidence out of the
+	// record: a species whose base walk gives the pinned move half the time
+	// would else be left, now and then, with too few matching cells in the
+	// 16 and end mid-event. To every other pin of the slot they are
+	// agreements like any other (design §10): judge and seedExcluded read
+	// both rings.
+	pinEqual *modRing
+}
+
+func (r *modRecord) push(cell s2.CellID, id int32, agree bool, unix int64) {
+	r.modRing.push(modRecEntry{cell: cell, unix: unix, id: id, agree: agree})
+	r.touch(unix)
+}
+
+// pushPinEqual enters a move agreement on move id, the move of a pin that
+// has a modifier.
+func (r *modRecord) pushPinEqual(cell s2.CellID, id int32, unix int64) {
+	if r.pinEqual == nil {
+		r.pinEqual = new(modRing)
+	}
+	r.pinEqual.push(modRecEntry{cell: cell, unix: unix, id: id, agree: true})
 	r.touch(unix)
 }
 
@@ -77,31 +110,59 @@ func (r *modRecord) push(cell s2.CellID, id int32, agree bool, unix int64) {
 // nothing about the moved cuts).
 func (r *modRecord) touch(unix int64) { r.last = max(r.last, unix) }
 
-// at returns the i-th newest entry, 1 ≤ i ≤ r.n.
-func (r *modRecord) at(i int) modRecEntry {
-	return r.buf[(int(r.head)-i+modRecordSize)%modRecordSize]
+// eachOldestFirst calls fn with the entries of both rings in time order,
+// oldest first; at one time, a pin-equal agreement comes after the others
+// (the order within a second is not kept across the rings, and taking the
+// agreement as the later one excludes its cell: conservative).
+func (r *modRecord) eachOldestFirst(fn func(modRecEntry)) {
+	i, j := int(r.n), 0
+	if r.pinEqual != nil {
+		j = int(r.pinEqual.n)
+	}
+	for i >= 1 || j >= 1 {
+		if j < 1 || (i >= 1 && r.at(i).unix <= r.pinEqual.at(j).unix) {
+			fn(r.at(i))
+			i--
+		} else {
+			fn(r.pinEqual.at(j))
+			j--
+		}
+	}
 }
 
 // modJudge is what a record must hold for a verdict to be on: entries
-// fresh entries, and matches from cells distinct cells.
-type modJudge struct{ entries, cells int }
+// fresh entries, matches from cells distinct cells, and the effect's share
+// of the fresh entries that say anything: at least three quarters, or with
+// stay more than half.
+type modJudge struct {
+	entries, cells int
+	stay           bool
+}
 
 // modJudgeOn is what turns zone-wide on; modJudgeStay what keeps a confirmed
-// modifier zone-wide (hysteresis): Start fresh entries and matching cells
-// instead of Confirm and modSpreadMinCells, still a majority and still two
-// matching cells modSpreadMinKm apart. Sampled encounters arrive at random,
-// and an hour with fewer than Confirm of them is common at 12 an hour; it
-// must not end an event that every one of them still shows. An event that
-// ended is still out within Unseen (its matches age) or at the first base
-// majority.
-func modJudgeOn(p modifierParams) modJudge { return modJudge{p.Confirm, modSpreadMinCells} }
+// modifier zone-wide (hysteresis, design §9.1 and §10): Start fresh entries
+// instead of Confirm, matches from min(Start, modSpreadMinCells) cells
+// instead of modSpreadMinCells, more than half instead of three quarters,
+// and still two matching cells modSpreadMinKm apart. Sampled encounters
+// arrive at random, and an hour with fewer than Confirm of them is common
+// at 12 an hour; it must not end an event that every one of them still
+// shows. And as an event's last spawns drain, or its first arrive among the
+// spawns from before it, the share crosses one half many times: turning on
+// at a bare majority confirmed and ended it at each crossing. An event that
+// ended is paused at its second base result running and out within Unseen
+// (its matches age) or once its share is no more than half.
+func modJudgeOn(p modifierParams) modJudge {
+	return modJudge{entries: p.Confirm, cells: modSpreadMinCells}
+}
 
-func modJudgeStay(p modifierParams) modJudge { return modJudge{p.Start, p.Start} }
+func modJudgeStay(p modifierParams) modJudge {
+	return modJudge{entries: p.Start, cells: min(p.Start, modSpreadMinCells), stay: true}
+}
 
 // modVerdict is a record's judgement of one effect.
 type modVerdict struct {
-	// on: the record holds enough fresh entries, the effect is more than
-	// half of them, and its matches are spread.
+	// on: the record holds enough fresh entries, the effect has its share
+	// of those that say anything, and its matches are spread.
 	on bool
 	// thin: too few fresh entries.
 	thin bool
@@ -123,14 +184,17 @@ func (v modVerdict) lost() string {
 
 // judge evaluates effect id against the record's fresh entries, those at or
 // after cut: older ones do not count. For a move pin an agreement whose
-// observed move is the pinned one is neutral (the base walk and the pin
-// give the same move): it is left out of the majority.
+// observed move is the pinned one is neutral for that pin (the base walk
+// and the pin give the same move): it is left out of the share. Judged for
+// another pin of the slot it is an agreement like any other, from either
+// ring.
 func (r *modRecord) judge(id int32, pin bool, need modJudge, cut int64) modVerdict {
 	var (
 		v                     modVerdict
 		cells                 [modRecordSize]s2.CellID
 		nCells                int
 		fresh, match, neutral int
+		saidUnix              int64 // the latest fresh entry that says anything
 	)
 	for i := 1; i <= int(r.n); i++ { // newest first
 		e := r.at(i)
@@ -144,7 +208,7 @@ func (r *modRecord) judge(id int32, pin bool, need modJudge, cut int64) modVerdi
 		}
 		mine := !e.agree && e.id == id
 		if fresh-neutral == 1 {
-			v.byEffect = !e.agree && !mine
+			v.byEffect, saidUnix = !e.agree && !mine, e.unix
 		}
 		if mine {
 			match++
@@ -154,8 +218,25 @@ func (r *modRecord) judge(id int32, pin bool, need modJudge, cut int64) modVerdi
 			}
 		}
 	}
+	if r.pinEqual != nil {
+		for i := 1; i <= int(r.pinEqual.n); i++ {
+			e := r.pinEqual.at(i)
+			if e.unix < cut || e.id == id {
+				continue
+			}
+			fresh++ // an agreement on another pin's move
+			if e.unix >= saidUnix {
+				v.byEffect = false
+			}
+		}
+	}
 	v.thin = fresh < need.entries
-	v.on = !v.thin && 2*match > fresh-neutral && nCells >= need.cells && modCellsSpread(cells[:nCells])
+	said := fresh - neutral
+	share := 4*match >= 3*said
+	if need.stay {
+		share = 2*match > said
+	}
+	v.on = !v.thin && match > 0 && share && nCells >= need.cells && modCellsSpread(cells[:nCells])
 	return v
 }
 
@@ -196,6 +277,17 @@ func (st *modScopeState) active(d modDim) bool {
 		}
 	}
 	return false
+}
+
+// activeTrack returns the track of dimension d that has a modifier, nil
+// when none has (a size dimension has one track).
+func (st *modScopeState) activeTrack(d modDim) *modTrack {
+	for _, t := range st.tracks {
+		if t.dim == d && t.mod != nil {
+			return t
+		}
+	}
+	return nil
 }
 
 // hasModifier reports whether the track of effect id on dimension d has a

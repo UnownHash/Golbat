@@ -12,9 +12,10 @@ import (
 // on together, under any mix of the turn-on and stay-on rules.
 
 // TestModifierRecordOneVerdictOn: random records (fresh and aged entries,
-// agreements, neutral pin agreements and two or three effect ids over
-// spread cells) never have two ids on at once, whichever of them is judged
-// to turn on and which to stay on.
+// agreements, neutral pin agreements in either ring and two or three effect
+// ids over spread cells) never have two ids on at once, whichever of them
+// is judged to turn on (three quarters) and which to stay on (more than
+// half).
 func TestModifierRecordOneVerdictOn(t *testing.T) {
 	p := defaultModifierParams()
 	needs := []modJudge{modJudgeOn(p), modJudgeStay(p)}
@@ -31,6 +32,11 @@ func TestModifierRecordOneVerdictOn(t *testing.T) {
 			agree := rng.IntN(4) == 0
 			if agree && rng.IntN(2) == 0 {
 				id = 99 // an agreement on a move no pin holds
+			}
+			if agree && id != 99 && rng.IntN(2) == 0 {
+				// An agreement on the move of a pin that has a modifier.
+				rec.pushPinEqual(cells[rng.IntN(len(cells))], id, unix)
+				continue
 			}
 			rec.push(cells[rng.IntN(len(cells))], id, agree, unix)
 		}
@@ -125,14 +131,14 @@ func checkOneAppliedPerSlot(t *testing.T, seed uint64, i int, idx *modifierIndex
 		return
 	}
 	type key struct {
-		typ  modifierType
-		slot string
-		zone string
+		typ       modifierType
+		slot, cut string
+		zone      string
 	}
 	for scope, entries := range idx.confirmed {
 		seen := map[key]modifierEffect{}
 		for _, e := range entries {
-			k := key{e.typ, e.effect.Slot, e.zone}
+			k := key{e.typ, e.effect.Slot, e.effect.Cut, e.zone}
 			if prev, ok := seen[k]; ok {
 				t.Fatalf("seed %d event %d: scope %+v has two applied %v in %s: %+v and %+v",
 					seed, i, scope, e.typ, e.zone, prev, e.effect)

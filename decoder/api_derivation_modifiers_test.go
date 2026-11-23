@@ -19,8 +19,8 @@ func TestApiDerivationModifiersShape(t *testing.T) {
 		Effect: modifierEffect{Slot: modSlotCharged, Move: 494}, Zone: "Europe/London", Status: modConfirmed,
 		Start: start, Observations: 14, Cells: zoneWideIn()})
 	size := &derivationModifier{Type: modSizeCutoffs, Scope: modifierScope{PokemonID: 1},
-		Boundaries: map[string]sizeBoundary{"1/2": {Lo: 0.5, HasLo: true}},
-		Zone:       "Europe/London", Status: modCandidate, Start: start.Add(time.Hour),
+		Effect: modifierEffect{Cut: "1/2"}, Interval: sizeBoundary{Lo: 0.5, HasLo: true},
+		Zone: "Europe/London", Status: modCandidate, Start: start.Add(time.Hour),
 		Cells: cellSet(adjCellA.Next(), adjCellA)}
 	unexp := withSpread(&derivationModifier{Type: modUnexplained, Scope: modifierScope{PokemonID: 2, Form: 5, Strong: true},
 		Zone: "Europe/London", Status: modCandidate, Start: start, Cells: zoneWideIn()})
@@ -38,7 +38,7 @@ func TestApiDerivationModifiersShape(t *testing.T) {
 	if p.ID != "2026-11-15-move_pin-strong-959-3272-charged-494" || !p.Region.ZoneWide || p.Status != "confirmed" {
 		t.Fatalf("pin %+v", p)
 	}
-	if s.ID != "2026-11-15-size_cutoffs-1-0" || s.Status != "candidate" || len(s.Region.Cells) != 2 ||
+	if s.ID != "2026-11-15-size_cutoffs-1-0-1/2" || s.Status != "candidate" || len(s.Region.Cells) != 2 ||
 		s.Region.Cells[0] > s.Region.Cells[1] || s.Region.Cells[0] != minTok(adjCellA, adjCellA.Next()) {
 		t.Fatalf("size %+v", s)
 	}

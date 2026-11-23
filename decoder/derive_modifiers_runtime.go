@@ -24,9 +24,9 @@ import (
 // transition (a candidate's coming and its unconfirmed end at Debug, the
 // rest at Info) and republishes derivationModifierIndex and the API snapshot
 // after a transition or a shrink of a confirmed modifier's coverage
-// (zone-wide lost, a cell excluded, size boundaries moved) at once, and
-// after growth (zone-wide gained, a cell readmitted) or an evidence-only
-// change at most once per deriveModifiersEvidenceInterval. A publish re-clones only the modifiers
+// (zone-wide lost, a cell excluded, paused, a size interval moved) at once,
+// and after growth (zone-wide gained, a cell readmitted, a pause lifted) or
+// an evidence-only change at most once per deriveModifiersEvidenceInterval. A publish re-clones only the modifiers
 // changed since the last one. State is in memory only.
 
 // deriveModifiersQueueSize is the learner's channel capacity: 16384
@@ -70,7 +70,9 @@ type modifierRuntime struct {
 
 	// zoneOf maps a level-14 cell to its index in zoneNames; zoneNames[0]
 	// is "" (unknown). zoneIndex is the reverse, so cells share one name.
-	// Cleared before an insert would take it past deriveZoneCacheMax.
+	// Cleared before an insert would take it past deriveZoneCacheMax. Each
+	// cell added is counted for its zone in the learner (cellSeen), which
+	// scales the excluded-cell cap by the cells seen in the zone.
 	zoneOf    map[s2.CellID]uint16
 	zoneNames []string
 	zoneIndex map[string]uint16
@@ -330,8 +332,10 @@ func (r *modifierRuntime) zone(cell s2.CellID) string {
 	}
 	if len(r.zoneOf) >= deriveZoneCacheMax {
 		clear(r.zoneOf)
+		r.learner.cellsForgotten()
 	}
 	r.zoneOf[cell] = i
+	r.learner.cellSeen(name)
 	return name
 }
 
@@ -396,7 +400,7 @@ func modifierTransitionQuiet(tr modifierTransition) bool {
 // formatModifierTransition is the [DERIVE_MODIFIER] log line for tr.
 // region is the number of venue cells (listed, not coverage), or zone-wide
 // with the excluded and the venue cells it has: "zone-wide less 1 plus 3
-// cells".
+// cells", then "paused" when it is.
 func formatModifierTransition(tr modifierTransition) string {
 	m := tr.Mod
 	region := strconv.Itoa(len(m.Cells)) + " cells"
@@ -407,6 +411,9 @@ func formatModifierTransition(tr modifierTransition) string {
 		}
 		if n := len(m.Cells); n > 0 {
 			region += " plus " + strconv.Itoa(n) + " cells"
+		}
+		if m.Paused {
+			region += " paused"
 		}
 	}
 	line := fmt.Sprintf("[DERIVE_MODIFIER] %s %s %s scope=%s zone=%s region=%s obs=%d contra=%d",
@@ -430,7 +437,7 @@ func formatModifierScope(s modifierScope) string {
 }
 
 // formatModifierEffect renders a modifier's payload: delta=+N, <slot>=<move>,
-// cuts=<boundary>:<lo>..<hi>,... (an unbounded end left empty), or "-".
+// cuts=<boundary>:<lo>..<hi> (an unbounded end left empty), or "-".
 func formatModifierEffect(m *derivationModifier) string {
 	switch m.Type {
 	case modLevelOffset:
@@ -438,24 +445,14 @@ func formatModifierEffect(m *derivationModifier) string {
 	case modMovePin:
 		return m.Effect.Slot + "=" + strconv.Itoa(int(m.Effect.Move))
 	case modSizeCutoffs:
-		keys := make([]string, 0, len(m.Boundaries))
-		for k := range m.Boundaries {
-			keys = append(keys, k)
+		var lo, hi string
+		if b := m.Interval; b.HasLo {
+			lo = strconv.FormatFloat(b.Lo, 'f', 4, 64)
 		}
-		slices.Sort(keys)
-		parts := make([]string, len(keys))
-		for i, k := range keys {
-			b := m.Boundaries[k]
-			var lo, hi string
-			if b.HasLo {
-				lo = strconv.FormatFloat(b.Lo, 'f', 4, 64)
-			}
-			if b.HasHi {
-				hi = strconv.FormatFloat(b.Hi, 'f', 4, 64)
-			}
-			parts[i] = k + ":" + lo + ".." + hi
+		if b := m.Interval; b.HasHi {
+			hi = strconv.FormatFloat(b.Hi, 'f', 4, 64)
 		}
-		return "cuts=" + strings.Join(parts, ",")
+		return "cuts=" + m.Effect.Cut + ":" + lo + ".." + hi
 	}
 	return "-"
 }

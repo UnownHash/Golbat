@@ -543,14 +543,15 @@ func (pokemon *Pokemon) applyDerivedValues(v encounter.Draw, adj derivationAdjus
 }
 
 // applyDerivedSize fills an absent size from the draw, reclassified with
-// adj's moved cuts when it has any; a roll inside a moved cut's interval
-// leaves size absent.
+// adj's moved cuts when it has any; a roll inside a moved cut's interval,
+// cuts that do not fit together, or a paused size modifier leave size
+// absent.
 func (pokemon *Pokemon) applyDerivedSize(v encounter.Draw, adj derivationAdjust) {
 	if pokemon.Size.Valid {
 		return
 	}
 	size := v.Size
-	if adj.Size != nil {
+	if adj.adjustsSize() {
 		var ok bool
 		if size, ok = adj.sizeClass(v.SizeRoll, adj.strong, int32(int64OrZero(pokemon.Form)), v.Size); !ok {
 			return
@@ -564,7 +565,7 @@ func (pokemon *Pokemon) applyDerivedSize(v encounter.Draw, adj derivationAdjust)
 // identity has just changed can have its moves re-derived without its IVs
 // and level being touched — see resetDittoAttributes. A move pinned by adj
 // fills its slot when absent, as a derived one does, even when the pools do
-// not resolve.
+// not resolve; a slot adj withholds (a paused pin) is left as it is.
 func (pokemon *Pokemon) applyDerivedMoves(v encounter.Draw, adj derivationAdjust) {
 	if !config.Config.DeriveIv || hasPlayerSpecificStats(pokemon.PokemonId) {
 		return
@@ -581,10 +582,16 @@ func (pokemon *Pokemon) applyDerivedMoves(v encounter.Draw, adj derivationAdjust
 	moves := derivedMoves(&v, species, form)
 	move1, move2 := moves.Move1, moves.Move2
 	ok1, ok2 := moves.Resolved, moves.Resolved
-	if adj.Quick != 0 {
+	switch {
+	case adj.NoQuick:
+		ok1 = false
+	case adj.Quick != 0:
 		move1, ok1 = adj.Quick, true
 	}
-	if adj.Charged != 0 {
+	switch {
+	case adj.NoCharged:
+		ok2 = false
+	case adj.Charged != 0:
 		move2, ok2 = adj.Charged, true
 	}
 	if ok1 && !pokemon.Move1.Valid {

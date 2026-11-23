@@ -60,10 +60,10 @@ func withSpread(m *derivationModifier) *derivationModifier {
 }
 
 // excludedSet is a modifier's excluded cells.
-func excludedSet(cells ...s2.CellID) map[s2.CellID]uint8 {
-	m := make(map[s2.CellID]uint8, len(cells))
+func excludedSet(cells ...s2.CellID) map[s2.CellID]struct{} {
+	m := make(map[s2.CellID]struct{}, len(cells))
 	for _, c := range cells {
-		m[c] = 1
+		m[c] = struct{}{}
 	}
 	return m
 }
@@ -203,10 +203,10 @@ func TestDerivationAdjustMovePin(t *testing.T) {
 }
 
 func TestDerivationAdjustSizeShift(t *testing.T) {
-	adj := derivationAdjust{Size: map[string]sizeBoundary{
+	adj := sizeAdjust(false, map[string]sizeBoundary{
 		"1/2": {Lo: 0.0119, Hi: 0.0121, HasLo: true, HasHi: true},
 		"2/3": {Lo: 0.0369, Hi: 0.0371, HasLo: true, HasHi: true},
-	}}
+	})
 	for _, tc := range []struct {
 		roll float64
 		want int32
@@ -218,7 +218,7 @@ func TestDerivationAdjustSizeShift(t *testing.T) {
 		}
 	}
 	// A strong roll: only "4/5" exists.
-	strong := derivationAdjust{Size: map[string]sizeBoundary{"4/5": {Lo: 0.6, Hi: 0.61, HasLo: true, HasHi: true}}}
+	strong := sizeAdjust(true, map[string]sizeBoundary{"4/5": {Lo: 0.6, Hi: 0.61, HasLo: true, HasHi: true}})
 	if got, ok := strong.sizeClass(0.7, true, 0, 4); got != 5 || !ok {
 		t.Errorf("strong sizeClass(0.7) = (%d, %v), want (5, true)", got, ok)
 	}
@@ -238,7 +238,7 @@ func TestDerivationAdjustSizeFixedForm(t *testing.T) {
 	if fixed == 0 {
 		t.Skip("no fixed-size form")
 	}
-	adj := derivationAdjust{Size: map[string]sizeBoundary{"1/2": {Lo: 0.0119, Hi: 0.0121, HasLo: true, HasHi: true}}}
+	adj := sizeAdjust(false, map[string]sizeBoundary{"1/2": {Lo: 0.0119, Hi: 0.0121, HasLo: true, HasHi: true}})
 	if got, ok := adj.sizeClass(0.012, false, fixed, 4); got != 4 || !ok {
 		t.Errorf("fixed form sizeClass = (%d, %v), want base (4, true)", got, ok)
 	}
@@ -336,7 +336,7 @@ func TestDerivationAdjustSkipsDitto(t *testing.T) {
 	p := adjRecord(132, adjLatA, adjLonA, false)
 	p.IsDitto = true
 	p.DisplayPokemonId = null.ValueFrom(uint16(16))
-	if adj := p.modifierAdjust(); adj.LevelDelta != 0 || adj.Suppress || adj.Size != nil || adj.Quick != 0 || adj.Charged != 0 {
+	if adj := p.modifierAdjust(); adj.LevelDelta != 0 || adj.Suppress || adj.adjustsSize() || adj.Quick != 0 || adj.Charged != 0 {
 		t.Errorf("Ditto modifierAdjust = %+v, want zero", adj)
 	}
 	base := encounter.Derive(adjEid, p.statsBoosted(), false, 0)
@@ -419,11 +419,23 @@ func TestModifierIndexWantsSighting(t *testing.T) {
 	}
 }
 
-// sizeMod is a confirmed zone-wide size_cutoffs modifier for species 1 in
-// adjZoneA.
-func sizeMod(b map[string]sizeBoundary) *derivationModifier {
-	return &derivationModifier{Type: modSizeCutoffs, Scope: modifierScope{PokemonID: 1}, Boundaries: b,
-		Zone: adjZoneA, Status: modConfirmed, ZoneWide: true}
+// sizeMod is a confirmed zone-wide size_cutoffs modifier of boundary cut
+// for species 1 in adjZoneA.
+func sizeMod(cut string, b sizeBoundary) *derivationModifier {
+	return &derivationModifier{Type: modSizeCutoffs, Scope: modifierScope{PokemonID: 1},
+		Effect: modifierEffect{Cut: cut}, Interval: b, Zone: adjZoneA, Status: modConfirmed, ZoneWide: true}
+}
+
+// sizeAdjust is the adjustment of the applied boundaries b on the strong or
+// ordinary walk.
+func sizeAdjust(strong bool, b map[string]sizeBoundary) derivationAdjust {
+	adj := derivationAdjust{strong: strong}
+	for name, iv := range b {
+		i := sizeCutIndex(strong, name)
+		adj.size[i] = iv
+		adj.sizeSet |= 1 << i
+	}
+	return adj
 }
 
 // Size through deriveIvIfAbsent: adjEid's unboosted roll is ~0.733 (base
@@ -437,8 +449,7 @@ func TestDerivationAdjustSizeThroughDerive(t *testing.T) {
 		t.Fatalf("adjEid roll %v class %d: test assumes a mid-range class-3 roll", r, base.Size)
 	}
 
-	withModifierIndex(t, sizeMod(map[string]sizeBoundary{
-		"3/4": {Lo: r - 0.01, Hi: r + 0.01, HasLo: true, HasHi: true}}))
+	withModifierIndex(t, sizeMod("3/4", sizeBoundary{Lo: r - 0.01, Hi: r + 0.01, HasLo: true, HasHi: true}))
 	inside := adjRecord(1, adjLatA, adjLonA, false)
 	inside.deriveIvIfAbsent()
 	if inside.Size.Valid {
@@ -448,8 +459,7 @@ func TestDerivationAdjustSizeThroughDerive(t *testing.T) {
 		t.Error("IVs not derived alongside an absent size")
 	}
 
-	withModifierIndex(t, sizeMod(map[string]sizeBoundary{
-		"2/3": {Lo: r + 0.01, Hi: r + 0.02, HasLo: true, HasHi: true}}))
+	withModifierIndex(t, sizeMod("2/3", sizeBoundary{Lo: r + 0.01, Hi: r + 0.02, HasLo: true, HasHi: true}))
 	below := adjRecord(1, adjLatA, adjLonA, false)
 	below.deriveIvIfAbsent()
 	if got := below.Size.ValueOrZero(); !below.Size.Valid || got != 2 {
@@ -732,14 +742,14 @@ func TestModifierIndexAppliesZoneWideOnly(t *testing.T) {
 // in each slot and size cutoffs all apply to one record, without
 // allocating.
 func TestDerivationAdjustCombinesTypes(t *testing.T) {
-	size := map[string]sizeBoundary{"1/2": {Lo: 0.01, Hi: 0.02, HasLo: true, HasHi: true}}
+	size := sizeBoundary{Lo: 0.01, Hi: 0.02, HasLo: true, HasHi: true}
 	withModifierIndex(t,
 		levelMod(modifierScope{PokemonID: 1}, 5, adjZoneA, nil),
 		pinMod(adjZoneA, modSlotQuick, 300), pinMod(adjZoneA, modSlotCharged, 494),
-		sizeMod(size))
+		sizeMod("1/2", size))
 	p := adjRecord(1, adjLatA, adjLonA, false)
 	adj := p.modifierAdjust()
-	if adj.Suppress || adj.LevelDelta != 5 || adj.Quick != 300 || adj.Charged != 494 || adj.Size["1/2"] != size["1/2"] {
+	if adj.Suppress || adj.LevelDelta != 5 || adj.Quick != 300 || adj.Charged != 494 || adj.sizeSet != 1 || adj.size[0] != size {
 		t.Errorf("adj = %+v, want delta 5, pins 300/494, moved 1/2", adj)
 	}
 	if n := testing.AllocsPerRun(100, func() { _ = p.modifierAdjust() }); n != 0 {

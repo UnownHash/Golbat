@@ -557,14 +557,14 @@ func TestDerivationModifiersRuntimeRepublishesSizeBoundaries(t *testing.T) {
 		r.handle(ev)
 	}
 	snap := activeDerivationModifiers()
-	if len(snap) != 1 || snap[0].Status != modConfirmed {
-		t.Fatalf("snapshot %+v, want one confirmed size modifier", snap)
+	if len(snap) != 1 || snap[0].Status != modConfirmed || snap[0].Effect.Cut != "1/2" {
+		t.Fatalf("snapshot %+v, want one confirmed 1/2 size modifier", snap)
 	}
-	if b := derivationModifierIndex.Load().lookup(19, 0, false, cellA, modZoneOf).Size["1/2"]; b.Lo != 0.011 {
-		t.Fatalf("1/2 = %+v, want lo 0.011", b)
+	if adj := derivationModifierIndex.Load().lookup(19, 0, false, cellA, modZoneOf); adj.sizeSet != 1 || adj.size[0].Lo != 0.011 {
+		t.Fatalf("size %+v set %b, want 1/2 with lo 0.011", adj.size, adj.sizeSet)
 	}
 	r.handle(modCheck(modT0.Add(time.Minute), cellA, withSize(0.013, 1)))
-	b := derivationModifierIndex.Load().lookup(19, 0, false, cellA, modZoneOf).Size["1/2"]
+	b := derivationModifierIndex.Load().lookup(19, 0, false, cellA, modZoneOf).size[0]
 	if b != (sizeBoundary{Lo: 0.013, Hi: 0.015, HasLo: true, HasHi: true}) {
 		t.Fatalf("after a narrowing roll: 1/2 = %+v, want [0.013, 0.015]", b)
 	}

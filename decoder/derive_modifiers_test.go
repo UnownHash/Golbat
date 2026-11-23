@@ -264,8 +264,9 @@ func TestModifierGlobalGoesZoneWide(t *testing.T) {
 	}
 }
 
-// Zone-wide coverage needs the effect in more than half of the zone
-// record's fresh entries and at least confirm of them.
+// Zone-wide coverage turns on with the effect in at least three quarters
+// of the zone record's fresh entries, and at least confirm of them; it
+// stays on with more than half (design §10).
 func TestModifierZoneWideNeedsRecordMajority(t *testing.T) {
 	spread := modSpreadCells(16)
 	rec := func(matches, agreements int) *modRecord {
@@ -280,10 +281,15 @@ func TestModifierZoneWideNeedsRecordMajority(t *testing.T) {
 	}
 	for _, c := range []struct {
 		matches, agreements int
-		on                  bool
-	}{{9, 0, false}, {10, 0, true}, {8, 2, true}, {5, 5, false}, {9, 7, true}, {8, 8, false}, {16, 0, true}} {
-		if got := rec(c.matches, c.agreements).judge(494, true, modJudge{10, 8}, 100).on; got != c.on {
-			t.Errorf("%d matches, %d agreements: zone-wide %v, want %v", c.matches, c.agreements, got, c.on)
+		on, stay            bool
+	}{{9, 0, false, false}, {10, 0, true, true}, {8, 2, true, true}, {9, 3, true, true}, {5, 5, false, false},
+		{11, 5, false, true}, {12, 4, true, true}, {9, 7, false, true}, {8, 8, false, false}, {16, 0, true, true}} {
+		r := rec(c.matches, c.agreements)
+		if got := r.judge(494, true, modJudge{entries: 10, cells: 8}, 100).on; got != c.on {
+			t.Errorf("%d matches, %d agreements: turns on %v, want %v", c.matches, c.agreements, got, c.on)
+		}
+		if got := r.judge(494, true, modJudge{entries: 10, cells: 8, stay: true}, 100).on; got != c.stay {
+			t.Errorf("%d matches, %d agreements: stays on %v, want %v", c.matches, c.agreements, got, c.stay)
 		}
 	}
 	// Entries before the cut do not count: six aged matches leave ten fresh
@@ -292,7 +298,7 @@ func TestModifierZoneWideNeedsRecordMajority(t *testing.T) {
 	for i := range 4 {
 		r.buf[i].unix = 99
 	}
-	if v := r.judge(494, true, modJudge{10, 8}, 100); v.on || !v.thin {
+	if v := r.judge(494, true, modJudge{entries: 10, cells: 8}, 100); v.on || !v.thin {
 		t.Errorf("six fresh matches of ten entries: %+v, want off and thin", v)
 	}
 	r = rec(6, 0)
@@ -305,10 +311,10 @@ func TestModifierZoneWideNeedsRecordMajority(t *testing.T) {
 	for i := range 6 {
 		r.push(spread[10+i], 268, true, 100)
 	}
-	if v := r.judge(494, true, modJudge{10, 8}, 100); v.on || v.thin || v.lost() != "agreement" {
+	if v := r.judge(494, true, modJudge{entries: 10, cells: 8}, 100); v.on || v.thin || v.lost() != "agreement" {
 		t.Errorf("four fresh matches and six fresh agreements: %+v, want off by agreement", v)
 	}
-	if v := r.judge(494, true, modJudge{10, 8}, 101); !v.thin || v.lost() != "unseen" {
+	if v := r.judge(494, true, modJudge{entries: 10, cells: 8}, 101); !v.thin || v.lost() != "unseen" {
 		t.Errorf("every entry aged: %+v, want thin", v)
 	}
 }
@@ -605,11 +611,13 @@ func TestModifierLearnerDirty(t *testing.T) {
 	feed(cellD)
 	check("cell excluded", shrink)
 	feed(cellD)
-	check("repeated agreement in an excluded cell", modDirty{})
+	check("second agreement running: paused", shrink)
+	feed(cellD)
+	check("repeated agreement in an excluded cell, already paused", modDirty{})
 	feed(cellD, withCharged(300))
 	check("another effect in an excluded cell", modDirty{})
 	feed(cellD, withCharged(494))
-	check("excluded cell readmitted", growth)
+	check("excluded cell readmitted, pause lifted", growth)
 	feed(cellE, withCharged(300))
 	check("another effect in a covered cell", shrink)
 	feed(cellA)
@@ -632,6 +640,8 @@ func TestModifierLearnerDirty(t *testing.T) {
 	feed(cellA2)
 	check("candidate's cell removed", evidence)
 	feed(cellA3)
+	check("candidate paused at its second agreement running", evidence)
+	feed(cellA3)
 	check("candidate's excluded cell", modDirty{})
 }
 
@@ -648,10 +658,15 @@ func TestModifierLearnerVersion(t *testing.T) {
 	}
 	v = m.version
 	l.feed(modCheck(modT0.Add(2*time.Second), cellD), modZone)
+	if m.version == v || !m.Paused {
+		t.Fatal("the second agreement running did not pause and bump the version")
+	}
+	v = m.version
+	l.feed(modCheck(modT0.Add(3*time.Second), cellD), modZone)
 	if m.version != v {
 		t.Fatalf("a repeated agreement in an excluded cell bumped the version %d → %d", v, m.version)
 	}
-	l.feed(modCheck(modT0.Add(3*time.Second), cellA, withCharged(494)), modZone)
+	l.feed(modCheck(modT0.Add(4*time.Second), cellA, withCharged(494)), modZone)
 	if m.version == v {
 		t.Fatal("an observation left the version unchanged")
 	}
@@ -671,14 +686,14 @@ func modifierWith(t *testing.T, l *modifierLearner, move int32) *derivationModif
 // TestModifierSupersededPinEnds: a confirmed pin whose zone starts deviating
 // to another move loses each cell at that cell's first such check, and ends
 // as contradicted once the other move is half of the zone record, instead of
-// masking it.
+// masking it; the other confirms at three quarters.
 func TestModifierSupersededPinEnds(t *testing.T) {
 	l := newModifierLearner(defaultModifierParams())
 	cells := modWideCells(10)
 	confirmPin(t, l, modZone, modT0, cells...)
 	var ended, confirmed int
-	for i := range 10 {
-		trs := l.feed(modCheck(modT0.Add(time.Duration(1+i)*time.Second), cells[i], withCharged(300)), modZone)
+	for i := range 12 {
+		trs := l.feed(modCheck(modT0.Add(time.Duration(1+i)*time.Second), cells[i%10], withCharged(300)), modZone)
 		for _, tr := range trs {
 			switch {
 			case tr.State == modEnded && tr.Mod.Effect.Move == 494:
@@ -698,9 +713,10 @@ func TestModifierSupersededPinEnds(t *testing.T) {
 			}
 		}
 	}
-	// 494 holds 8 of the record's 16 at the 8th 300.
-	if ended != 8 || confirmed != 10 {
-		t.Fatalf("494 ended at deviation %d, 300 confirmed at %d; want 8 and 10", ended, confirmed)
+	// 494 holds 8 of the record's 16 at the 8th 300, and 300 has 12 at its
+	// 12th.
+	if ended != 8 || confirmed != 12 {
+		t.Fatalf("494 ended at deviation %d, 300 confirmed at %d; want 8 and 12", ended, confirmed)
 	}
 	if m := onlyActive(t, l); m.Effect.Move != 300 || m.Status != modConfirmed {
 		t.Fatalf("active %+v, want only the confirmed 300 pin", m.Effect)

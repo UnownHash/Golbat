@@ -20,12 +20,13 @@ type ApiDerivationModifiers struct {
 }
 
 type ApiDerivationModifier struct {
-	ID       string              `json:"id" doc:"<start date>-<type>-<scope>-<effect>"`
+	ID       string              `json:"id" doc:"<start date>-<type>-<scope>-<effect>; the effect part of a size_cutoffs id is its boundary (1/2 .. 4/5)"`
 	Scope    ApiModifierScope    `json:"scope"`
 	Window   ApiModifierWindow   `json:"window"`
-	Effect   map[string]any      `json:"effect" doc:"level_offset {type, delta}, move_pin {type, slot, move} or size_cutoffs {type, boundaries: {cut: [lo, hi]}} with null for an unbounded end, or unexplained {type}"`
+	Effect   map[string]any      `json:"effect" doc:"level_offset {type, delta}, move_pin {type, slot, move} or size_cutoffs {type, boundaries: {cut: [lo, hi]}} (one boundary per modifier) with null for an unbounded end, or unexplained {type}"`
 	Status   string              `json:"status" doc:"candidate or confirmed"`
-	Applied  bool                `json:"applied" doc:"The derive path applies it: confirmed, zone-wide and not an all-strong summary. Venue cells alone are never applied"`
+	Applied  bool                `json:"applied" doc:"The derive path applies it: confirmed, zone-wide, not paused and not an all-strong summary. Venue cells alone are never applied"`
+	Paused   bool                `json:"paused" doc:"The zone's last two checks that say anything about it agreed with the base value, with no match since: until the next match its dimension is withheld where it covers (no level and IVs, no move in its slot, or no size), not derived at the base value. Never true for unexplained"`
 	Evidence ApiModifierEvidence `json:"evidence"`
 	Region   ApiModifierRegion   `json:"region"`
 }
@@ -56,9 +57,9 @@ type ApiModifierEvidence struct {
 // are detection evidence, listed and never applied.
 type ApiModifierRegion struct {
 	Zone     string   `json:"zone" doc:"IANA timezone"`
-	ZoneWide bool     `json:"zone_wide" doc:"Covers the whole zone except the excluded cells: matches from at least 8 level-14 cells, two of them at least 10 km apart, are the majority of the zone's recent checks. The only coverage the derive path applies"`
+	ZoneWide bool     `json:"zone_wide" doc:"Covers the whole zone except the excluded cells: matches from at least 8 level-14 cells, two of them at least 10 km apart, hold their share of the zone's recent checks (three quarters to turn on, more than half to stay). The only coverage the derive path applies"`
 	Cells    []string `json:"cells" doc:"Venue cells (level-14 S2 cell tokens): two matches and no other result there since. Detection evidence only, never applied; sorted, empty when none"`
-	Excluded []string `json:"excluded" doc:"Level-14 cells a zone-wide modifier does not cover: their latest check disproved it, until a match there (at most 256). Sorted; empty when none or not zone-wide"`
+	Excluded []string `json:"excluded" doc:"Level-14 cells a zone-wide modifier does not cover: their latest check disproved it, until a match there (for size_cutoffs, a roll there that contradicts the disproving one). At most 256, or 1% of the cells seen in the zone when that is more, up to 4096. Sorted; empty when none or not zone-wide"`
 }
 
 // cellTokens is cells' tokens, sorted; empty, never nil.
@@ -92,6 +93,8 @@ func apiModifierID(m *derivationModifier) string {
 		effect = fmt.Sprintf("%s-%d", m.Effect.Slot, m.Effect.Move)
 	case modLevelOffset:
 		effect = fmt.Sprintf("delta%+d", m.Effect.Delta)
+	case modSizeCutoffs:
+		effect = m.Effect.Cut
 	}
 	parts := []string{m.Start.UTC().Format("2006-01-02"), m.Type.String(), scope}
 	if effect != "" {
@@ -109,20 +112,14 @@ func apiModifierEffect(m *derivationModifier) map[string]any {
 		e["slot"] = m.Effect.Slot
 		e["move"] = m.Effect.Move
 	case modSizeCutoffs:
-		b := make(map[string][2]*float64, len(m.Boundaries))
-		for name, sb := range m.Boundaries {
-			var lo, hi *float64
-			if sb.HasLo {
-				v := sb.Lo
-				lo = &v
-			}
-			if sb.HasHi {
-				v := sb.Hi
-				hi = &v
-			}
-			b[name] = [2]*float64{lo, hi}
+		var lo, hi *float64
+		if m.Interval.HasLo {
+			lo = &m.Interval.Lo
 		}
-		e["boundaries"] = b
+		if m.Interval.HasHi {
+			hi = &m.Interval.Hi
+		}
+		e["boundaries"] = map[string][2]*float64{m.Effect.Cut: {lo, hi}}
 	}
 	return e
 }
@@ -144,6 +141,7 @@ func GetApiDerivationModifiers(now time.Time) *ApiDerivationModifiers {
 			Effect:  apiModifierEffect(m),
 			Status:  m.Status.String(),
 			Applied: modifierApplied(m),
+			Paused:  m.Paused,
 			Evidence: ApiModifierEvidence{Observations: m.Observations,
 				Contradictions: m.Contradictions},
 			Region: ApiModifierRegion{Zone: m.Zone, ZoneWide: m.ZoneWide,
