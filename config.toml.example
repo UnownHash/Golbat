@@ -80,11 +80,11 @@ retain_days = 14
 # move, moved size cuts, or an unexplained mismatch) from live encounter checks, per timezone, and
 # applies confirmed ones to derived values. start deviations within window_seconds open a candidate.
 # It covers its whole timezone while its effect is more than half of the zone's last 16 checks (at
-# least confirm of them, with matches under two ~10 km level-10 cells), less the cells that last
-# agreed; and it covers a ~1 km (level-14 S2) venue cell after two matches there, until one check
+# least confirm of them, with matches under two ~10 km level-10 cells, the latest within
+# unseen_seconds), less the cells whose last check showed something else; and it covers a ~1 km (level-14 S2) venue cell after two matches there, until one check
 # there agrees or shows another effect. It is confirmed with confirm deviations once it covers
-# something, and ends when it covers nothing, or when its species is not seen where it covers for
-# unseen_seconds. Under sampled encounters (Dragonite's hourly minimum of 12) a zone-wide event that
+# something (a candidate not confirmed within unseen_seconds ends), and ends when it covers nothing,
+# or when its species is not seen where it covers for unseen_seconds. Under sampled encounters (Dragonite's hourly minimum of 12) a zone-wide event that
 # ends on the hour stops applying within the next hour. start and confirm are at most 16. An
 # all-strong level offset is never applied; where two confirmed modifiers of one type and slot cover
 # a record, that value is withheld. Transitions are logged as [DERIVE_MODIFIER]; state is in memory

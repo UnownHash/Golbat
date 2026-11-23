@@ -60,8 +60,8 @@ type modVerdict struct {
 	// byEffect: the latest entry is another effect (what displaced this one
 	// when on turns false).
 	byEffect bool
-	// excluded holds, sorted, the nExcluded cells whose latest entry is an
-	// agreement.
+	// excluded holds, sorted, the nExcluded cells whose latest entry is not
+	// this effect: an agreement or another effect.
 	excluded  [modRecordSize]s2.CellID
 	nExcluded int
 }
@@ -70,8 +70,8 @@ func (v *modVerdict) cells() []s2.CellID { return v.excluded[:v.nExcluded] }
 
 // judge evaluates effect id against the record. For a move pin an agreement
 // whose observed move is the pinned one is neutral (the base walk and the
-// pin give the same move): it is left out of the majority and excludes no
-// cell.
+// pin give the same move): it is left out of the majority and says nothing
+// about its cell.
 func (r *modRecord) judge(id int32, pin bool, confirm int) modVerdict {
 	var (
 		v              modVerdict
@@ -104,7 +104,7 @@ func (r *modRecord) judge(id int32, pin bool, confirm int) modVerdict {
 		}
 		seen[nSeen] = e.cell
 		nSeen++
-		if e.agree {
+		if !mine {
 			v.excluded[v.nExcluded] = e.cell
 			v.nExcluded++
 		}

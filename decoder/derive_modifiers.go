@@ -165,15 +165,15 @@ type derivationModifier struct {
 	// transition's time; LastSeen the latest match, or check or sighting of
 	// the scope where the modifier covers.
 	Start, End, LastSeen time.Time
-	EndReason            string // "agreement" | "contradicted" | "unseen"
+	EndReason            string // "agreement" | "contradicted" | "unseen" | "unconfirmed"
 	// Observations counts matching deviations (for size, accepted rolls);
 	// Contradictions the other effects seen where the modifier covered or had
 	// a match (for size, the rolls its intervals refuse).
 	Observations   int
 	Contradictions int
 	// ZoneWide: the modifier covers its zone, less the Excluded cells (those
-	// whose latest check in the zone record agreed; sorted, at most 16, nil
-	// when not zone-wide). Excluded is replaced, never modified in place, so
+	// whose latest check in the zone record agreed or showed another effect;
+	// sorted, at most 16, nil when not zone-wide). Excluded is replaced, never modified in place, so
 	// copies may share it.
 	ZoneWide bool
 	Excluded []s2.CellID
@@ -769,11 +769,16 @@ func (l *modifierLearner) endUnseen(now time.Time, out []modifierTransition) []m
 	return out
 }
 
-// prune bounds the learner's maps: encounter ids past their expiry, venue
-// cells with no match for Unseen (a confirmed modifier left with no coverage
-// ends unseen), pending deviations older than Window, tracks with no
-// modifier and no deviation within Window, zone records idle for Window with
-// no modifier judged on them, and scopes left with nothing.
+// prune ages what no check has refreshed and bounds the learner's maps.
+// Encounter ids past their expiry go. A venue cell with no match for Unseen
+// is forgotten, and a modifier whose zone record has had no located check
+// for Unseen is no longer zone-wide (sightings show the species, not the
+// effect); the record is emptied, so zone-wide needs fresh checks. A
+// confirmed modifier left with no coverage ends unseen, and a candidate not
+// confirmed within Unseen of its start ends unconfirmed (a new one can form
+// from fresh deviations). Then pending deviations older than Window, tracks
+// with no modifier and no deviation within Window, zone records idle for
+// Window with no modifier judged on them, and scopes left with nothing.
 func (l *modifierLearner) prune(now time.Time, out []modifierTransition) []modifierTransition {
 	unix := now.Unix()
 	l.nextPrune = unix + modPruneInterval
@@ -790,7 +795,22 @@ func (l *modifierLearner) prune(now time.Time, out []modifierTransition) []modif
 				l.venueDrop(t, cell, false)
 			}
 		}
-		if m := t.mod; m.Status == modConfirmed && !m.ZoneWide && len(m.Cells) == 0 {
+		m := t.mod
+		if st := l.scopes[modScopeKey{t.key.Scope, t.key.Zone}]; st != nil {
+			if rec := st.rec[t.dim]; rec != nil && rec.last < stale {
+				*rec = modRecord{}
+				if m.ZoneWide {
+					m.ZoneWide, m.Excluded = false, nil
+					l.changed(m, modShrink)
+				}
+			}
+		}
+		switch {
+		case m.Status == modCandidate:
+			if now.Sub(m.Start) > l.p.Unseen {
+				out = append(out, l.end(t, now, "unconfirmed"))
+			}
+		case !m.ZoneWide && len(m.Cells) == 0:
 			out = append(out, l.end(t, now, "unseen"))
 		}
 	}
