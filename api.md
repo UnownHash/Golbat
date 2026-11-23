@@ -252,7 +252,7 @@ with an empty `modifiers` array.
     cell stays excluded for the modifier's life until a match in that cell
     (for size, one crossing each boundary disproved there), whatever
     happens to the 16-check record meanwhile. At most 256: one more turns
-    zone-wide off for good, which ends a confirmed modifier (`agreement`)
+    zone-wide off for good, which ends a confirmed modifier (usually `agreement`)
     and a candidate (`unconfirmed`; fresh deviations open a new one).
     Listed only while zone-wide.
   - `cells` (a ticketed venue): the level-14 S2 cells with two matches and

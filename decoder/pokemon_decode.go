@@ -501,10 +501,10 @@ func (pokemon *Pokemon) calculateIv(a int64, d int64, s int64) {
 // v is taken by value because MoveIndices advances its embedded generator
 // state; the caller's copy is unaffected.
 //
-// adj is the confirmed derivation modifiers' adjustment (modifierAdjust),
-// read once by the caller: the level delta, the pinned moves and moved size
-// cuts. A suppressing adj is the
-// caller's to honour — it must not call this.
+// adj is the applied derivation modifiers' adjustment (modifierAdjust),
+// read once by the caller: the level delta, the pinned moves and the moved
+// size cuts. A suppressing adj is the caller's to honour — it must not call
+// this.
 //
 // Moves are derived for pokemon.PokemonId/Form as they stand, which at every
 // call site is the species/form being derived for, except that a Ditto's are

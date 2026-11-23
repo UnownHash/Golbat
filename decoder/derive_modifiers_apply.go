@@ -191,6 +191,8 @@ func modifierZoneOf(cell s2.CellID) string {
 	ll := cell.LatLng()
 	z := tz.SearchTimezone(ll.Lat.Degrees(), ll.Lng.Degrees())
 	// Concurrent misses may overshoot the cap by the number of decoders.
+	// Clear allocates a fresh table on the decode path, once per ~200,000
+	// misses, each already paying a timezone search.
 	if modifierZoneCache.Size() >= deriveZoneCacheMax {
 		modifierZoneCache.Clear()
 	}
