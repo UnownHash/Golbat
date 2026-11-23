@@ -9,7 +9,7 @@ import (
 
 // Where a modifier covers and whether it applies there (design §8–§10):
 // the cells that disproved it (excluded until answered, capped by the size
-// of the zone), the pause on agreements running, and the venue cells listed
+// of the zone), the pause on non-matches running, and the venue cells listed
 // as evidence.
 
 // A modifier's excluded cells are bounded by excludedCap: modExcludedMin,
@@ -22,8 +22,8 @@ const (
 	modExcludedShare = 100
 )
 
-// modPauseAfter is how many located agreements running, with no match
-// between, pause a modifier.
+// modPauseAfter is how many located checks running that are not a
+// modifier's effect, with no match between, pause it.
 const modPauseAfter = 2
 
 // modVenueCell is a cell's matches since its last agreement or other
@@ -77,27 +77,30 @@ func (l *modifierLearner) excludedCap(zone string) int {
 	return min(max(n/modExcludedShare, modExcludedMin), modExcludedMax)
 }
 
-// agreed counts a located agreement that says something about m. The
-// modPauseAfter-th running pauses m: every event seen applied to its whole
-// scope, so base results running mean the event is over (or absent here),
-// and what it would derive is withheld rather than risked.
-func (l *modifierLearner) agreed(m *derivationModifier) {
+// missed counts a located check that says something about m and is not its
+// effect: an agreement with the base value or another effect (design
+// §10.2: a superseding effect brings no agreement, and the superseded one
+// was applied until its share fell to half, about 28 minutes at 12 checks
+// an hour). The modPauseAfter-th running pauses m: every event seen applied
+// to its whole scope, so other results running mean the event is over (or
+// absent here), and what it would derive is withheld rather than risked.
+func (l *modifierLearner) missed(m *derivationModifier) {
 	if m.Type == modUnexplained {
 		return
 	}
-	if m.agreeRun < modPauseAfter {
-		m.agreeRun++
+	if m.missRun < modPauseAfter {
+		m.missRun++
 	}
-	if m.agreeRun >= modPauseAfter && !m.Paused {
+	if m.missRun >= modPauseAfter && !m.Paused {
 		m.Paused = true
 		l.changed(m, modShrink)
 	}
 }
 
-// matched notes a located match of m: the agreements no longer run, and a
+// matched notes a located match of m: the non-matches no longer run, and a
 // paused m applies again.
 func (l *modifierLearner) matched(m *derivationModifier) {
-	m.agreeRun = 0
+	m.missRun = 0
 	if m.Paused {
 		m.Paused = false
 		l.changed(m, modGrowth)

@@ -26,7 +26,7 @@ type ApiDerivationModifier struct {
 	Effect   map[string]any      `json:"effect" doc:"level_offset {type, delta}, move_pin {type, slot, move} or size_cutoffs {type, boundaries: {cut: [lo, hi]}} (one boundary per modifier) with null for an unbounded end, or unexplained {type}"`
 	Status   string              `json:"status" doc:"candidate or confirmed"`
 	Applied  bool                `json:"applied" doc:"The derive path applies it: confirmed, zone-wide, not paused and not an all-strong summary. Venue cells alone are never applied"`
-	Paused   bool                `json:"paused" doc:"The zone's last two checks that say anything about it agreed with the base value, with no match since: until the next match its dimension is withheld where it covers (no level and IVs, no move in its slot, or no size), not derived at the base value. Never true for unexplained"`
+	Paused   bool                `json:"paused" doc:"The zone's last two checks that say anything about it were not its effect (the base value or another effect), with no match since: until the next match its dimension is withheld where it covers (no level and IVs, no move in its slot, or no size), not derived at the base value. Never true for unexplained"`
 	Evidence ApiModifierEvidence `json:"evidence"`
 	Region   ApiModifierRegion   `json:"region"`
 }

@@ -30,7 +30,10 @@ import (
 // cell keeps that roll: it is readmitted only by a later roll there that
 // the interval accepts and that contradicts the disproving one (design
 // §10). A match on the near side of the disproving roll does not: both fit
-// a cut lying between them, local to the cell.
+// a cut lying between them, local to the cell. Until then the cell's rolls
+// say where its own cut lies, not the zone's: they are no evidence for the
+// shared interval, no match in the zone record and lift no pause (design
+// §10.2).
 
 // sizeCut is one size class boundary: classes <= below lie under it.
 type sizeCut struct {
@@ -177,11 +180,12 @@ func (l *modifierLearner) sizeDisprove(t *modTrack, cell s2.CellID, lower bool, 
 // sizeResolve applies a roll t's interval accepts, seen in cell on the side
 // lower, to the cell's disproof: a roll under the cut at or above the
 // disproving roll over it (or the reverse) contradicts that roll, and the
-// cell is readmitted once nothing disproves it.
-func (l *modifierLearner) sizeResolve(t *modTrack, cell s2.CellID, lower bool, roll float64) {
+// cell is readmitted once nothing disproves it. It reports whether the cell
+// is free of a disproof afterwards.
+func (l *modifierLearner) sizeResolve(t *modTrack, cell s2.CellID, lower bool, roll float64) bool {
 	d, ok := t.size.disproof[cell]
 	if !ok {
-		return
+		return true
 	}
 	if lower && d.hasUpper && roll >= d.upper {
 		d.hasUpper = false
@@ -191,10 +195,11 @@ func (l *modifierLearner) sizeResolve(t *modTrack, cell s2.CellID, lower bool, r
 	}
 	if d.hasUpper || d.hasLower {
 		t.size.disproof[cell] = d
-		return
+		return false
 	}
 	delete(t.size.disproof, cell)
 	l.readmit(t, cell)
+	return true
 }
 
 // sizeOpinion reports whether ev says anything about the size roll. The
@@ -280,9 +285,11 @@ func (l *modifierLearner) sizeOpen(t *modTrack, st *modScopeState, now time.Time
 // t's modifier. Without a cell a deviation is an observation and nothing
 // else. A contrary roll is an agreement in the record, counts towards the
 // pause and disproves the boundary in its cell; another roll the interval
-// refuses is a contradiction and does the same. Any other is evidence and
-// answers the cell's disproof when it contradicts it; a deviation is also a
-// match. A roll that enters nothing still marks the record checked.
+// refuses is a contradiction and does the same. Any other first answers the
+// cell's disproof when it contradicts it; from a cell still disproved it
+// then says nothing about the zone (the interval, the record and the pause
+// are left as they were), else it is evidence, and a deviation a match. A
+// roll that enters nothing still marks the record checked.
 func (l *modifierLearner) sizeRoll(t *modTrack, rec *modRecord, ev modifierEvent, dev bool, now time.Time) {
 	m := t.mod
 	c := t.size.cut
@@ -293,20 +300,24 @@ func (l *modifierLearner) sizeRoll(t *modTrack, rec *modRecord, ev modifierEvent
 		case sizeRollContrary:
 			rec.push(ev.Cell, 0, true, ev.Unix)
 			l.sizeDisprove(t, ev.Cell, lower, ev.SizeRoll)
-			l.agreed(m)
+			l.missed(m)
 			return
 		case sizeRollRefused:
 			m.Contradictions++
 			rec.push(ev.Cell, modIDSizeOther, false, ev.Unix)
 			l.changed(m, modEvidence)
 			l.sizeDisprove(t, ev.Cell, lower, ev.SizeRoll)
+			l.missed(m)
+			return
+		}
+		if !l.sizeResolve(t, ev.Cell, lower, ev.SizeRoll) {
+			rec.touch(ev.Unix)
 			return
 		}
 		if changed {
 			m.Interval = next
 			l.changed(m, modShrink) // a moved interval can reclassify a record
 		}
-		l.sizeResolve(t, ev.Cell, lower, ev.SizeRoll)
 		if dev {
 			t.located++
 			rec.push(ev.Cell, modIDSizeMatch, false, ev.Unix)

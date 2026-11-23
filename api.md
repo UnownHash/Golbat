@@ -264,7 +264,9 @@ with an empty `modifiers` array.
     keeps the disproving roll and is readmitted only by a roll there that
     contradicts it: one classified under the cut at or above a disproving
     roll classified over it, or the reverse. Any other match fits a cut
-    between the two rolls, local to the cell. At most 256, or 1% of the
+    between the two rolls, local to the cell, and until the cell is
+    readmitted its rolls are no evidence for the zone: they do not narrow
+    the boundary's interval, count as matches or lift a pause. At most 256, or 1% of the
     level-14 cells seen in the zone when that is more, up to 4096: one more
     turns zone-wide off for good, which ends a confirmed modifier (usually
     `agreement`) and a candidate (`unconfirmed`; fresh deviations open a
@@ -279,8 +281,8 @@ with an empty `modifiers` array.
 - Lifecycle: `start` matching deviations (default 3) within `window_seconds`
   open a candidate. It is confirmed when it is zone-wide and has had
   `confirm` located matches (default 10). A candidate not confirmed within
-  2 × `unseen_seconds` of its start ends (`unconfirmed`); fresh deviations
-  open a new one. A confirmed modifier ends, and drops out of this list, as
+  2 × `unseen_seconds` of its start ends (`unconfirmed`) and is never
+  confirmed after that; fresh deviations open a new one. A confirmed modifier ends, and drops out of this list, as
   soon as it is not zone-wide: reason `unseen` when too few fresh checks are
   left (or its scope was not seen where it covers for `unseen_seconds`),
   `contradicted` when the latest fresh check showed another effect, else
@@ -292,11 +294,13 @@ with an empty `modifiers` array.
   scope ages it. Ended modifiers appear only in the `[DERIVE_MODIFIER]`
   log, with the end reason.
 - `paused` is true when the zone's last two located checks that say
-  anything about the modifier agreed with the base value, with no match
-  between or since (a check without a cell, another effect, or a pin-equal
-  move agreement neither counts nor resets). Every event seen applied to
-  its whole scope, so a live event does not pause; one that has ended is
-  paused at the second base check. A paused modifier stays listed with its
+  anything about the modifier were not its effect (the base value, or
+  another effect: another delta or move, a size roll its interval
+  refuses), with no match between or since (a check without a cell or a
+  pin-equal move agreement neither counts nor resets). Every event seen
+  applied to its whole scope, so a live event does not pause; one that has
+  ended, or was replaced by another effect, is paused at the second such
+  check. A paused modifier stays listed with its
   region and is not applied; where it covers, its dimension is withheld
   rather than derived at the base value: a level offset leaves the record
   with no derived level or IVs, a move pin leaves its slot empty, a size
@@ -320,9 +324,10 @@ with an empty `modifiers` array.
   per type and slot, or size boundary (zone-wide needs its share of the
   zone record). A scope's applied size boundaries combine per cell: a
   boundary that does not cover the cell (excluded there, or not applied)
-  leaves its cut at the base value, and when an applied interval passes a
-  neighbouring cut (base or another interval) no size is derived in that
-  cell.
+  leaves its cut at the base value, and when an applied interval passes
+  another cut (base or another interval) no size is derived in that cell.
+  An interval with no upper end is held to this by its lower end, which no
+  later cut's known bound may lie under.
 
 **Status Codes:**
 - 200: OK

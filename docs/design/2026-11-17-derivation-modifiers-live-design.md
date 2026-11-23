@@ -426,6 +426,66 @@ paths. Decisions with the project owner:
   times as an event starts (36 to 40 before). The 16-entry record's
   sampling noise (about ±12.5 points) is half the 25-point band.
 
+### 10.2 Round 6 (amended after the fifth review round)
+
+Rules changed or added; where they differ from §10 and §10.1 these hold.
+
+- **The pause counts any non-match.** Every located check in the
+  modifier's zone record that says anything about it and is not its effect
+  counts towards the pause: an agreement with the base value, or another
+  effect (another delta or move, a size roll its interval refuses). A match
+  resets the run; a check without a cell and a pin-equal agreement still
+  neither count nor reset. This replaces §10.1's "the pause counts
+  agreements only": an effect replaced by another at once (+5 by +3) shows
+  no base result, so the stale +5 was applied until its share fell to half,
+  about 28 minutes at 12 checks an hour. It now stops at the second check
+  (about 11 minutes at 12 an hour, the same as a plain end).
+- **Excluded size evidence stays local.** A roll from a cell with an
+  unresolved disproof for a boundary says where that cell's cut lies, not
+  the zone's. Resolution is evaluated first; while the cell stays
+  disproved, an accepted roll there never narrows the shared interval, adds
+  a zone match (or an observation), or lifts a pause. Example: true cut
+  0.012, interval (0.011, 0.015]; an excluded venue's XS at 0.0115 must not
+  move the upper end, or a roll at 0.01175 elsewhere would be given XS. A
+  roll that answers the disproof readmits the cell and is then evidence
+  like any other.
+- **Full cut validation.** The index validates the whole cut sequence
+  against every known bound, intervals with no upper end included: such an
+  interval's lower end must not lie above any later cut's known bound (the
+  base cut, or an interval's ends), else the size is withheld in that cell.
+  Example: 1/2 known only to lie above 0.050 with 2/3 at its base 0.029
+  gave XXS at 0.040; now no roll gets a class. Rolls from an open
+  interval's lower end up stay absent.
+- **Deadline before confirmation.** A candidate's deadline (2 × unseen
+  from its start) is checked wherever it could confirm, on the feed path
+  and on the sweep path, before the confirmation. It was checked only when
+  pruning (once a minute of event time), after confirming: a check at
+  2h00m01s following a sweep at 1h59m59s confirmed a candidate that should
+  have ended.
+
+Scope ruling (project owner): a **city-scale non-ticketed regional
+effect** — one that covers 10 km or more and about half of a zone's checks
+without being zone-wide — is out of scope. Events are zone-wide or
+ticketed venues. The learner cannot tell such an effect from a zone-wide
+one (it passes the cell and 10 km rules and can hold the record's share),
+so it can be applied zone-wide; the cost if the ruling is wrong is that
+effect's value derived outside its region, less the cells that disproved
+it.
+
+Drain residual, stated both ways (simulated at 6000 checks an hour, an
+event's pre-end spawns draining linearly):
+
+- Counted from when the event's share of new spawns falls under half:
+  about 16 to 19 base spawns a run are still given the event value (§10.1's
+  figure, 45-minute drain).
+- Counted from the event's end, all post-end spawns given the event value
+  while the draining event spawns still hold the record: 182, 563 and 1,623
+  for 5, 15 and 45-minute drains (the fifth review's figures, not
+  re-measured here). The first figure leaves out the spawns of the time the
+  event's share is still over half, when the event value is the more likely
+  one; the pause bounds a run only once two non-matches arrive with no
+  match between.
+
 ## 11. Not included
 
 Loading a shared modifier file; retroactive correction; detection in the

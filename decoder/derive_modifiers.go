@@ -15,9 +15,10 @@ import (
 // record of the last 16 checks (derive_modifiers_record.go, design §8–§10):
 // a modifier covers its zone, less the cells that disproved it, while its
 // effect holds its share of that record's fresh entries (three quarters to
-// turn on, more than half to stay) and its matches are spread. Two
-// agreements running pause it until its next match. A ticketed venue is tracked cell by cell (level-14) and listed, but never
-// coverage: a venue-only modifier stays a candidate. The learner is a pure
+// turn on, more than half to stay) and its matches are spread. Two checks
+// running that are not its effect pause it until its next match. A ticketed
+// venue is tracked cell by cell (level-14) and listed, but never coverage: a
+// venue-only modifier stays a candidate. The learner is a pure
 // state machine owned by one goroutine; it does not dedupe encounters (the
 // decode site feeds it each spawn's first encounter only).
 
@@ -173,14 +174,15 @@ type derivationModifier struct {
 	// a modifier's only coverage (design §9).
 	ZoneWide bool
 	// Paused: the zone record's last modPauseAfter located checks that say
-	// anything about the modifier were agreements with the base value, with
-	// no match since (design §10). While paused the modifier's dimension is
-	// withheld where it covers: neither its value nor the base one is
-	// derived. The next located match unpauses it. An unexplained modifier
-	// never pauses: it already withholds.
+	// anything about the modifier were not its effect (an agreement with the
+	// base value or another effect), with no match since (design §10,
+	// §10.2). While paused the modifier's dimension is withheld where it
+	// covers: neither its value nor the base one is derived. The next
+	// located match unpauses it. An unexplained modifier never pauses: it
+	// already withholds.
 	Paused bool
-	// agreeRun counts those agreements, up to modPauseAfter.
-	agreeRun uint8
+	// missRun counts those non-matches, up to modPauseAfter.
+	missRun uint8
 	// Excluded holds the cells that disproved the modifier: their latest
 	// located check of its dimension was not its effect. A cell stays until
 	// a matching check there (for size_cutoffs, a roll there that contradicts
@@ -493,7 +495,7 @@ func (l *modifierLearner) takeDirty() modDirty {
 // pin-equal ring, where it does not displace that pin's evidence. It
 // disproves the cell for every other effect's modifier (and for
 // every modifier, when it agrees): the cell is excluded from it until a
-// match there, and an agreement counts towards its pause. It gates or voids
+// match there, and the check counts towards its pause. It gates or voids
 // the pending deviations of tracks without one, counts the match for its
 // own track, and re-judges the dimension's modifiers. A move agreeing with a
 // pinned move is neutral for that pin alone (the base walk and the pin give
@@ -522,9 +524,7 @@ func (l *modifierLearner) check(st *modScopeState, sk modScopeKey, d modDim, agr
 		case t.mod != nil:
 			if located {
 				l.disprove(t, ev.Cell, !agree)
-				if agree {
-					l.agreed(t.mod)
-				}
+				l.missed(t.mod)
 			}
 		case agree:
 			t.clearCell(ev.Cell, ev.Unix)
@@ -558,14 +558,16 @@ func (l *modifierLearner) track(st *modScopeState, sk modScopeKey, d modDim, id 
 // confirm. One whose excluded cells overflowed ends unconfirmed at once: it
 // could never go zone-wide, and at a global event's start (the spawns from
 // before it still agree, in hundreds of cells) it would block the event
-// until its deadline. A new candidate forms from the next Start matches. A
-// confirmed modifier no longer zone-wide ends, for the reason zone-wide was
-// lost.
+// until its deadline. So does one past its deadline, 2 × Unseen from its
+// start, checked here before the confirmation so that neither a check
+// between prunes nor a sweep confirms it late (design §10.2). A new
+// candidate forms from the next Start matches. A confirmed modifier no
+// longer zone-wide ends, for the reason zone-wide was lost.
 func (l *modifierLearner) settle(t *modTrack, now time.Time, out []modifierTransition) []modifierTransition {
 	m := t.mod
 	switch {
 	case m.Status == modCandidate:
-		if t.overflow {
+		if t.overflow || now.Sub(m.Start) > 2*l.p.Unseen {
 			return append(out, l.end(t, now, "unconfirmed"))
 		}
 		if m.ZoneWide && t.located >= l.p.Confirm {
@@ -720,11 +722,11 @@ func (l *modifierLearner) endUnseen(now time.Time, out []modifierTransition) []m
 // again on its zone record as of now: entries older than Unseen no longer
 // count, so a modifier whose matches have aged is no longer zone-wide
 // (sightings show the species, not the effect) and, confirmed, ends. A
-// candidate not confirmed within 2 × Unseen of its start ends unconfirmed (a
-// new one can form from fresh deviations). Then pending deviations older
-// than Window, tracks with no modifier and no deviation within Window, zone
-// records idle for Window with no modifier judged on them, and scopes left
-// with nothing.
+// candidate not confirmed within 2 × Unseen of its start ends unconfirmed
+// (settle; a new one can form from fresh deviations). Then pending
+// deviations older than Window, tracks with no modifier and no deviation
+// within Window, zone records idle for Window with no modifier judged on
+// them, and scopes left with nothing.
 func (l *modifierLearner) prune(now time.Time, out []modifierTransition) []modifierTransition {
 	unix := now.Unix()
 	l.nextPrune = unix + modPruneInterval
@@ -736,16 +738,12 @@ func (l *modifierLearner) prune(now time.Time, out []modifierTransition) []modif
 				l.venueDrop(t, cell)
 			}
 		}
-		m := t.mod
 		var rec *modRecord
 		if st := l.scopes[modScopeKey{t.key.Scope, t.key.Zone}]; st != nil {
 			rec = st.rec[t.dim]
 		}
 		l.judgeZone(t, rec, unix)
 		out = l.settle(t, now, out)
-		if t.mod == m && m.Status == modCandidate && now.Sub(m.Start) > 2*l.p.Unseen {
-			out = append(out, l.end(t, now, "unconfirmed"))
-		}
 	}
 	cut := unix - int64(l.p.Window/time.Second)
 	for sk, st := range l.scopes {

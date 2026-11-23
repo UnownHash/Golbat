@@ -69,7 +69,7 @@ decoder/
   derive_events_writer.go — Opt-in derivation events log (`derivation_events` config): deviation rows + per-bucket summaries, async writer
   derive_modifiers.go — Derivation modifier learner: pure state machine detecting event modifiers per zone (zone-wide) and venue cell
   derive_modifiers_record.go — The learner's zone record (last 16 checks per scope, zone, dimension) and zone-wide judgement
-  derive_modifiers_cover.go — The learner's excluded cells (cap scaled by zone), pause on agreement, venue cells
+  derive_modifiers_cover.go — The learner's excluded cells (cap scaled by zone), pause on non-matches, venue cells
   derive_modifiers_size.go — Size-cutoff modifiers in the learner (one per moved cut)
   derive_modifiers_apply.go — Immutable active-modifier index; applies confirmed modifiers to derived values
   derive_modifiers_runtime.go — Opt-in learner worker (`derivation_modifiers` config): channel, zone lookup, transition logging, index publish

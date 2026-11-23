@@ -288,12 +288,13 @@ func (a derivationAdjust) level(derived int32) int32 {
 // cut is replaced by its interval, below Lo the lower class, at or above Hi
 // the upper, inside it no class (false: leave size absent). An interval
 // with no Lo starts at the cut before it; one with no Hi leaves every roll
-// from its Lo up absent. The cuts must still be in order: when an applied
-// interval passes a neighbouring cut (a base one where that boundary does
-// not cover the record, or another interval), the two were learned apart
-// and do not describe one set of cuts, so no roll gets a class. A withheld
-// size is absent; a form whose size is fixed keeps base. It does not
-// allocate.
+// from its Lo up absent. The cuts must still be in order, all of them: when
+// an applied interval passes another cut (a base one where that boundary
+// does not cover the record, or another interval), the two were learned
+// apart and do not describe one set of cuts, so no roll gets a class. An
+// interval with no Hi is held to that by its Lo: every later cut's known
+// bounds must lie at or above it (design §10.2). A withheld size is absent;
+// a form whose size is fixed keeps base. It does not allocate.
 func (a derivationAdjust) sizeClass(roll float64, strong bool, form int32, base int32) (int32, bool) {
 	if encounter.FormFixesSize(form) {
 		return base, true
@@ -303,7 +304,7 @@ func (a derivationAdjust) sizeClass(roll float64, strong bool, form int32, base 
 	}
 	cuts := sizeCuts(strong)
 	class, ok, done := int32(cuts[len(cuts)-1].below)+1, true, false
-	floor := math.Inf(-1) // the end of the cut before
+	floor := math.Inf(-1) // the highest bound known of the cuts before
 	for i, c := range cuts {
 		lo, hi := c.at, c.at
 		if a.sizeSet&(1<<i) != 0 {
@@ -329,10 +330,12 @@ func (a derivationAdjust) sizeClass(roll float64, strong bool, form int32, base 
 		} else if !done && roll < hi {
 			class, ok, done = 0, false, true
 		}
-		if math.IsInf(hi, 1) {
-			break // nothing is known above lo: every roll there is absent
+		// Nothing is known above an open interval's lo: every roll there is
+		// absent (hi is +Inf above), and the later cuts are still checked
+		// against lo.
+		if floor = hi; math.IsInf(hi, 1) {
+			floor = lo
 		}
-		floor = hi
 	}
 	return class, ok
 }

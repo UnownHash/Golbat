@@ -75,16 +75,16 @@ func TestModifierPausesOnSecondAgreementRunning(t *testing.T) {
 	}
 }
 
-// Agreements without a cell, and another effect, are not agreements in the
-// zone record: neither counts towards the pause.
-func TestModifierPauseCountsRecordAgreementsOnly(t *testing.T) {
+// Checks without a cell are not in the zone record: neither an agreement
+// nor another effect without one counts towards the pause.
+func TestModifierPauseCountsRecordChecksOnly(t *testing.T) {
 	l := newModifierLearner(defaultModifierParams())
 	confirmLevel(t, l, modT0, modWideCells(10))
 	for i, ev := range []modifierEvent{
 		modCheck(modT0.Add(time.Second), 0),
 		modCheck(modT0.Add(2*time.Second), 0),
-		modCheck(modT0.Add(3*time.Second), cellD, withLevelDelta(3)),
-		modCheck(modT0.Add(4*time.Second), cellE, withLevelDelta(3)),
+		modCheck(modT0.Add(3*time.Second), 0, withLevelDelta(3)),
+		modCheck(modT0.Add(4*time.Second), 0, withLevelDelta(3)),
 		modCheck(modT0.Add(5*time.Second), cellF),
 	} {
 		l.feed(ev, modZone)
