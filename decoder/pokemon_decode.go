@@ -198,8 +198,10 @@ var unparseableSpawnpointIds util.DropReporter
 // having changed nothing, when the spawnpoint id is not parseable or when
 // the proto is at 0,0 and the id does not decode: the sighting cannot be
 // placed and the caller must drop it. Callers therefore run it before any
-// other mutation of the record.
-func (pokemon *Pokemon) addWildPokemon(ctx context.Context, db db.DbDetails, wildPokemon *pogo.WildPokemonProto, timestampMs int64, trustworthyTimestamp bool) bool {
+// other mutation of the record. A valid cellId (the sighting's level-15 map
+// cell) is stored with the coordinates, before anything here can derive;
+// an invalid one leaves the stored cell as it is.
+func (pokemon *Pokemon) addWildPokemon(ctx context.Context, db db.DbDetails, wildPokemon *pogo.WildPokemonProto, cellId null.Int, timestampMs int64, trustworthyTimestamp bool) bool {
 	if wildPokemon.EncounterId != uint64(pokemon.Id) {
 		panic("Unmatched EncounterId")
 	}
@@ -222,6 +224,9 @@ func (pokemon *Pokemon) addWildPokemon(ctx context.Context, db db.DbDetails, wil
 	}
 	pokemon.SetLat(lat)
 	pokemon.SetLon(lon)
+	if cellId.Valid {
+		pokemon.SetCellId(cellId)
+	}
 	pokemon.SetSpawnId(null.IntFrom(spawnId))
 
 	pokemon.setExpireTimestampFromSpawnpoint(ctx, db, timestampMs, trustworthyTimestamp)
@@ -324,8 +329,15 @@ func (pokemon *Pokemon) applySightingDerivation() {
 // updateFromWild applies a GMO wild sighting. It returns false, with the
 // record untouched, when the sighting cannot be placed (see addWildPokemon);
 // the caller must then skip the save.
+//
+// The sighting's cell is assigned inside addWildPokemon, with the
+// coordinates and before its setPokemonDisplay: that can re-derive
+// (repopulateIv), as can applySightingDerivation below, and a derivation
+// modifier is looked up by the record's cell (pokemonModifierCell), so a
+// record moving cells must derive with the cell it is placed in, not the
+// previous sighting's. Nothing else on this path reads the cell.
 func (pokemon *Pokemon) updateFromWild(ctx context.Context, db db.DbDetails, wildPokemon *pogo.WildPokemonProto, cellId int64, weather map[int64]pogo.GameplayWeatherProto_WeatherCondition, timestampMs int64, username string) bool {
-	if !pokemon.addWildPokemon(ctx, db, wildPokemon, timestampMs, true) {
+	if !pokemon.addWildPokemon(ctx, db, wildPokemon, null.IntFrom(cellId), timestampMs, true) {
 		return false
 	}
 	pokemon.SetIsEvent(0)
@@ -335,7 +347,6 @@ func (pokemon *Pokemon) updateFromWild(ctx context.Context, db db.DbDetails, wil
 	}
 	pokemon.applySightingDerivation()
 	pokemon.recomputeCpIfNeeded(ctx, db, weather)
-	pokemon.SetCellId(null.IntFrom(cellId))
 	pokemon.setUsernameIfStored(username)
 	return true
 }
@@ -490,6 +501,11 @@ func (pokemon *Pokemon) calculateIv(a int64, d int64, s int64) {
 // v is taken by value because MoveIndices advances its embedded generator
 // state; the caller's copy is unaffected.
 //
+// adj is the applied derivation modifiers' adjustment (modifierAdjust),
+// read once by the caller: the level delta, the pinned moves and the moved
+// size cuts. A suppressing adj is the caller's to honour — it must not call
+// this.
+//
 // Moves are derived for pokemon.PokemonId/Form as they stand, which at every
 // call site is the species/form being derived for, except that a Ditto's are
 // derived for its disguise (see applyDerivedMoves).
@@ -501,7 +517,7 @@ func (pokemon *Pokemon) calculateIv(a int64, d int64, s int64) {
 // Pool resolution is derivedMoves (derive_validation.go), shared with
 // checkDerivation so the two cannot resolve different pools for the same
 // species/form.
-func (pokemon *Pokemon) applyDerivedValues(v encounter.Draw) {
+func (pokemon *Pokemon) applyDerivedValues(v encounter.Draw, adj derivationAdjust) {
 	// The gate lives here rather than at the three call sites because this is
 	// the only place derived IVs, level, size or moves are written. A caller
 	// that forgets the check cannot write them anyway.
@@ -510,7 +526,7 @@ func (pokemon *Pokemon) applyDerivedValues(v encounter.Draw) {
 	}
 
 	pokemon.calculateIv(int64(v.Attack), int64(v.Defense), int64(v.Stamina))
-	pokemon.SetLevel(null.IntFrom(int64(v.Level)))
+	pokemon.SetLevel(null.IntFrom(int64(adj.level(v.Level))))
 
 	// Size and moves are filled only when absent, unlike the IVs and level
 	// above. clearIv drops the IVs on a weather flip it cannot match but
@@ -522,18 +538,35 @@ func (pokemon *Pokemon) applyDerivedValues(v encounter.Draw) {
 	// is known to be wrong — checkDerivation refuses to even score it, via
 	// moveOutOfPool. A derived value is indistinguishable from an observed one
 	// once written, so the observation must win.
-	if !pokemon.Size.Valid {
-		pokemon.SetSize(null.IntFrom(int64(v.Size)))
-	}
+	pokemon.applyDerivedSize(v, adj)
+	pokemon.applyDerivedMoves(v, adj)
+}
 
-	pokemon.applyDerivedMoves(v)
+// applyDerivedSize fills an absent size from the draw, reclassified with
+// adj's moved cuts when it has any; a roll inside a moved cut's interval,
+// cuts that do not fit together, or a paused size modifier leave size
+// absent.
+func (pokemon *Pokemon) applyDerivedSize(v encounter.Draw, adj derivationAdjust) {
+	if pokemon.Size.Valid {
+		return
+	}
+	size := v.Size
+	if adj.adjustsSize() {
+		var ok bool
+		if size, ok = adj.sizeClass(v.SizeRoll, adj.strong, int32(int64OrZero(pokemon.Form)), v.Size); !ok {
+			return
+		}
+	}
+	pokemon.SetSize(null.IntFrom(int64(size)))
 }
 
 // applyDerivedMoves fills whichever move slots are absent from the draw. It is
 // the moves half of applyDerivedValues, on its own so that a record whose
 // identity has just changed can have its moves re-derived without its IVs
-// and level being touched — see resetDittoAttributes.
-func (pokemon *Pokemon) applyDerivedMoves(v encounter.Draw) {
+// and level being touched — see resetDittoAttributes. A move pinned by adj
+// fills its slot when absent, as a derived one does, even when the pools do
+// not resolve; a slot adj withholds (a paused pin) is left as it is.
+func (pokemon *Pokemon) applyDerivedMoves(v encounter.Draw, adj derivationAdjust) {
 	if !config.Config.DeriveIv || hasPlayerSpecificStats(pokemon.PokemonId) {
 		return
 	}
@@ -547,14 +580,25 @@ func (pokemon *Pokemon) applyDerivedMoves(v encounter.Draw) {
 		species, form = int16(pokemon.DisplayPokemonId.ValueOrZero()), int16(pokemon.DisplayPokemonForm.ValueOrZero())
 	}
 	moves := derivedMoves(&v, species, form)
-	if !moves.Resolved {
-		return
+	move1, move2 := moves.Move1, moves.Move2
+	ok1, ok2 := moves.Resolved, moves.Resolved
+	switch {
+	case adj.NoQuick:
+		ok1 = false
+	case adj.Quick != 0:
+		move1, ok1 = adj.Quick, true
 	}
-	if !pokemon.Move1.Valid {
-		pokemon.SetMove1(null.IntFrom(int64(moves.Move1)))
+	switch {
+	case adj.NoCharged:
+		ok2 = false
+	case adj.Charged != 0:
+		move2, ok2 = adj.Charged, true
 	}
-	if !pokemon.Move2.Valid {
-		pokemon.SetMove2(null.IntFrom(int64(moves.Move2)))
+	if ok1 && !pokemon.Move1.Valid {
+		pokemon.SetMove1(null.IntFrom(int64(move1)))
+	}
+	if ok2 && !pokemon.Move2.Valid {
+		pokemon.SetMove2(null.IntFrom(int64(move2)))
 	}
 }
 
@@ -569,11 +613,18 @@ func (pokemon *Pokemon) deriveSizeAndMovesIfAbsent() {
 	if !config.Config.DeriveIv || !deriveStrongAllowed(strong) || hasPlayerSpecificStats(pokemon.PokemonId) {
 		return
 	}
-	v := encounter.Derive(uint64(pokemon.Id), pokemon.statsBoosted(), strong, int32(int64OrZero(pokemon.Form)))
-	if !pokemon.Size.Valid {
-		pokemon.SetSize(null.IntFrom(int64(v.Size)))
+	pokemon.deriveSizeAndMoves(pokemon.modifierAdjust())
+}
+
+// deriveSizeAndMoves is deriveSizeAndMovesIfAbsent past its exclusions, with
+// the caller's modifier adjustment; a suppressing one writes nothing.
+func (pokemon *Pokemon) deriveSizeAndMoves(adj derivationAdjust) {
+	if adj.Suppress {
+		return
 	}
-	pokemon.applyDerivedMoves(v)
+	v := encounter.Derive(uint64(pokemon.Id), pokemon.statsBoosted(), pokemon.IsStrong.ValueOrZero(), int32(int64OrZero(pokemon.Form)))
+	pokemon.applyDerivedSize(v, adj)
+	pokemon.applyDerivedMoves(v, adj)
 }
 
 // gmoCellLevel is the S2 level of the cells a GetMapObjects response is
@@ -1343,7 +1394,8 @@ func (pokemon *Pokemon) maybeMarkDittoFromRoll() {
 	// above set it, and encounter.For reads form only for the Pumpkaboo/
 	// Gourgeist size override, which cannot apply to a Ditto.
 	v := encounter.For(uint64(pokemon.Id), dittoCaughtBoosted(int64OrZero(pokemon.Weather)), 0)
-	pokemon.applyDerivedValues(v)
+	// A Ditto takes no modifier: zero adjustment.
+	pokemon.applyDerivedValues(v, derivationAdjust{})
 }
 
 // rollWouldMark reports whether maybeMarkDittoFromRoll would mark this record
@@ -1875,15 +1927,24 @@ func (pokemon *Pokemon) deriveIvIfAbsent() {
 	// size and moves but not the IVs, so those are filled on their own:
 	// without this a Pokemon that changed display would carry its IVs with no
 	// size or moves until a weather change or a real encounter.
+	if pokemon.AtkIv.Valid && pokemon.Size.Valid && pokemon.Move1.Valid && pokemon.Move2.Valid {
+		return
+	}
+	// Confirmed derivation modifiers, read once for this derivation. A Ditto
+	// gets the zero adjustment (modifierAdjustAs's IsDitto guard), so it is
+	// derived on base values. Unexplained suppresses every derived value, as
+	// derive_iv off would.
+	adj := pokemon.modifierAdjust()
+	if adj.Suppress {
+		return
+	}
 	if pokemon.AtkIv.Valid {
-		if !pokemon.Size.Valid || !pokemon.Move1.Valid || !pokemon.Move2.Valid {
-			pokemon.deriveSizeAndMovesIfAbsent()
-		}
+		pokemon.deriveSizeAndMoves(adj)
 		return
 	}
 
 	v := encounter.Derive(uint64(pokemon.Id), pokemon.statsBoosted(), strong, int32(int64OrZero(pokemon.Form)))
-	pokemon.applyDerivedValues(v)
+	pokemon.applyDerivedValues(v, adj)
 }
 
 // deriveStrongAllowed reports whether a record may be derived given whether
@@ -1990,6 +2051,20 @@ func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails
 		pokemon.setUsernameIfStored(username)
 		return
 	}
+	// Hydrate the scan history and roll mark from GolbatInternal before
+	// anything reads them: firstEncounter just below, and wasRollMarked
+	// (see there for why it must be hydrated).
+	pokemon.populateInternal()
+	// Each spawn is one piece of evidence for the modifier learner, however
+	// often it is encountered (design 2026-11-17 §7 "Evidence"): only an
+	// encounter of a record that held no encounter-reported scan feeds it.
+	// Decided from the record's own state before this encounter changes
+	// it: no (hydrated) scan history, and not loaded with an encounter seen
+	// type (a reload without pokemon_internal_to_db keeps the seen type but
+	// not the history). A roll-marked record's GolbatInternal carries the
+	// mark but no scans, so it still counts. The events log gets every check.
+	firstEncounter := derivationModifierLearnerOn && len(pokemon.scanHistory) == 0 &&
+		!encounteredSeenType(pokemon.oldValues.SeenType.Code)
 	pokemon.SetShiny(null.BoolFrom(proto.PokemonDisplay.Shiny))
 	pokemon.SetCp(null.IntFrom(int64(proto.Cp)))
 	pokemon.SetMove1(null.IntFrom(int64(proto.Move1)))
@@ -2073,15 +2148,15 @@ func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails
 	// clear dittoRollMarked; a read afterwards would be wrong for exactly the
 	// sightings this audits. See checkDerivation's wasRollMarked parameter.
 	//
-	// Hydrate first. dittoRollMarked lives in GolbatInternal, so on a record
-	// loaded from the database or a preserved cache it reads false until
-	// populateInternal has run, and nothing else here guarantees that:
-	// setPokemonDisplay skips hydration when the boost state is unchanged,
-	// and maybeMarkDittoFromRoll returns at its first guard because IsDitto
-	// is already true. Unhydrated, a reloaded roll-mark would be recorded as
-	// an independent detectDitto confirmation, the inflation derivecheck's
-	// roll_only column exists to prevent.
-	pokemon.populateInternal()
+	// Hydrated first (populateInternal at the top of this function).
+	// dittoRollMarked lives in GolbatInternal, so on a record loaded from
+	// the database or a preserved cache it reads false until populateInternal
+	// has run, and nothing else here guarantees that: setPokemonDisplay skips
+	// hydration when the boost state is unchanged, and maybeMarkDittoFromRoll
+	// returns at its first guard because IsDitto is already true. Unhydrated,
+	// a reloaded roll-mark would be recorded as an independent detectDitto
+	// confirmation, the inflation derivecheck's roll_only column exists to
+	// prevent.
 	wasRollMarked := pokemon.dittoRollMarked
 
 	// Captured before detectDitto for the same reason: it feeds
@@ -2183,7 +2258,19 @@ func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails
 	// DisplayPokemonId reflect this sighting's ground truth, but compares
 	// against observedScan — captured before detectDitto ran — not the
 	// (possibly Ditto-rewritten) pokemon record.
-	pokemon.checkDerivation(&observedScan, int32(proto.Size), int32(proto.Move1), int32(proto.Move2), pokemon.SeenType.Code.String(), wasRollMarked, hadDetectEvidence || (wasDitto && !pokemon.IsDitto))
+	chk := pokemon.checkDerivation(&observedScan, int32(proto.Size), int32(proto.Move1), int32(proto.Move2), pokemon.SeenType.Code.String(), wasRollMarked, hadDetectEvidence || (wasDitto && !pokemon.IsDitto))
+	// The same check feeds the events log and, for a spawn's first
+	// encounter, the modifier learner (as a compact modifierEvent, never
+	// the full record). The record is built only when one of them takes it;
+	// checkDerivation above (the [DERIVE] validation) runs regardless.
+	if wantsDeriveEventCheck(firstEncounter) {
+		if ev, ok := newDeriveEventCheck(pokemon, &observedScan, chk, username, time.Now()); ok {
+			submitDerivationEvent(ev)
+			if firstEncounter {
+				submitDerivationModifierEvent(newModifierEvent(ev))
+			}
+		}
+	}
 
 	// Normally a no-op: it returns immediately once Cp is set, which the proto
 	// almost always does. It earns its place when the proto did not report one
@@ -2199,7 +2286,7 @@ func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails
 // with the record untouched, when the encounter's wild proto cannot be
 // placed (see addWildPokemon); the caller must then skip the save.
 func (pokemon *Pokemon) updatePokemonFromEncounterProto(ctx context.Context, db db.DbDetails, encounterData *pogo.EncounterOutProto, username string, timestampMs int64) bool {
-	if !pokemon.addWildPokemon(ctx, db, encounterData.Pokemon, timestampMs, false) {
+	if !pokemon.addWildPokemon(ctx, db, encounterData.Pokemon, null.Int{}, timestampMs, false) {
 		return false
 	}
 	pokemon.SetIsEvent(0)
@@ -2421,7 +2508,15 @@ func (pokemon *Pokemon) repopulateIv(weather int64, isStrong bool) {
 	// not move with weather, so the other state's scan IS its scan.
 	usableScan := matchingScan != nil && (isBoostedMatches || isStrong)
 	var oldAtk, oldDef, oldSta int64
-	if !usableScan && config.Config.DeriveIv && deriveStrongAllowed(isStrong) {
+	// Confirmed derivation modifiers for the walk being derived; an
+	// unexplained one takes the derivation-off branches below.
+	derive := !usableScan && config.Config.DeriveIv && deriveStrongAllowed(isStrong)
+	var adj derivationAdjust
+	if derive {
+		adj = pokemon.modifierAdjustAs(isStrong)
+		derive = !adj.Suppress
+	}
+	if derive {
 		// Derive for the state actually being asked about — the encounter id
 		// is unchanged and isBoosted above already accounts for Ditto.
 		//
@@ -2439,13 +2534,17 @@ func (pokemon *Pokemon) repopulateIv(weather int64, isStrong bool) {
 		// The encounter's stats no longer stand, so an encounter record goes
 		// back to wild, as it does when the stats are cleared.
 		v := encounter.Derive(uint64(pokemon.Id), isBoosted, isStrong, int32(int64OrZero(pokemon.Form)))
-		pokemon.applyDerivedValues(v)
+		pokemon.applyDerivedValues(v, adj)
 		pokemon.downgradeEncounterSeenType()
 		pokemon.SetCp(null.NewInt(0, false))
 		pokemon.SetPvp(null.NewString("", false))
-	} else if matchingScan == nil {
+	} else if matchingScan == nil || adj.Suppress {
 		// Nothing stored and nothing derivable: clear, which is what
-		// derivation-off keeps.
+		// derivation-off keeps. A suppressed derivation clears too, even with
+		// the other boost state's scan on hand: the modifier says this
+		// record's values are not what the walk predicts, so the ±5 estimate
+		// below would be no better than the withheld derivation. A usable
+		// scan never reaches here — derive, and so Suppress, needs none.
 		pokemon.SetLevel(null.NewInt(0, false))
 		pokemon.clearIv(true)
 	} else {

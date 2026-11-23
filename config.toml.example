@@ -64,6 +64,44 @@ ditto_pool = []
 # depend on this and are always on.
 derivation_log = false
 
+# derivation_events: opt-in. Writes one JSON-lines file per UTC day into dir, holding each
+# deviation plus per-bucket agreement summaries. Read it with tools/eventreplay.py. Records
+# contain only ~1 km (level-14 S2 cell) locations and salted hashes of account and spawn id, never
+# raw usernames, spawn ids (~10 m cells) or coordinates. The salt is dir/derive-events.salt: never
+# share it with the files, or the hashes can be reversed. Files older than retain_days are removed.
+# Enabling it reserves ~20 MB for the event queue.
+[derivation_events]
+enabled = false
+dir = "logs"
+bucket_minutes = 15
+retain_days = 14
+
+# derivation_modifiers: opt-in, needs derive_iv. Learns event modifiers (a level offset, a
+# forced move, moved size cuts, or an unexplained mismatch) from live encounter checks, per
+# timezone, and applies confirmed zone-wide ones to derived values. start deviations within
+# window_seconds open a candidate. It turns zone-wide when its effect is at least three quarters
+# of the zone's last 16 located checks no older than unseen_seconds (at least confirm of them,
+# matches from 8+ level-14 S2 cells with two 10+ km apart); a confirmed one stays on with more
+# than half of at least start checks, matches from min(start, 8) cells. It covers the zone less
+# the cells whose latest check showed something else, until a match there (at most 256, or 1% of
+# the cells seen in the zone, up to 4096; one more ends it). It is confirmed with confirm matches
+# while zone-wide; a candidate not confirmed within 2 x unseen_seconds ends, and a confirmed one
+# ends when it is not zone-wide. Two base results running pause it until its next match: what it
+# changes (level and IVs, a move slot, or size) is then left empty, not derived at the base
+# value. Each moved size cut is its own modifier.
+# Venue cells (two matches in one ~1 km level-14 cell) are listed as evidence, never applied: a
+# venue-only modifier never confirms. A scan area under 10 km across never applies one.
+# Sightings do not keep it alive. start <= confirm <= 16; end and zone_wide_cells are no longer
+# used (ignored with a warning). Two or more strong species at one level offset in a zone are
+# listed as an all-strong summary, never applied. Transitions are logged as [DERIVE_MODIFIER];
+# state is in memory only (a restart relearns). Enabling it reserves ~1 MB for the event queue.
+[derivation_modifiers]
+enabled = false
+start = 3
+confirm = 10
+window_seconds = 1800
+unseen_seconds = 3600
+
 [koji]
 url = "http://{koji_url}/api/v1/geofence/feature-collection/{golbat_project}"
 bearer_token = "secret"

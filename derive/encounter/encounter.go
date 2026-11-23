@@ -25,6 +25,14 @@ var formSizes = map[int32]int32{
 	2645: SizeXS, 2646: SizeM, 2647: SizeXL, 2648: SizeXXL,
 }
 
+// FormFixesSize reports whether form displays a size fixed by the form
+// (formSizes) rather than the rolled class. For such a form Draw.Size is the
+// override and says nothing about SizeRoll.
+func FormFixesSize(form int32) bool {
+	_, ok := formSizes[form]
+	return ok
+}
+
 type Values struct {
 	Attack  int32
 	Defense int32
@@ -44,6 +52,14 @@ type Draw struct {
 	// Free: Next(bits) advances the LCG identically whatever bits is, so
 	// reading 24 of them costs no more than discarding the advance.
 	DittoRoll float32
+
+	// SizeRoll is the raw nextDouble in [0,1) the size class was cut from,
+	// set on both walks (For and ForStrong), including for a form whose size
+	// is fixed (FormFixesSize), where Size ignores it. The derivation events
+	// log reads it to detect an event moving the size cut points: classifying
+	// SizeRoll with the ordinary cuts and comparing to the observed size
+	// shows a shifted cutoff that Size alone cannot.
+	SizeRoll float64
 
 	// gen is the live generator, positioned immediately after the size roll:
 	// where MoveIndices continues from, and reachable without a pool size.
@@ -79,11 +95,13 @@ func For(encounterID uint64, weatherBoosted bool, form int32) Draw {
 		Stamina: r.Int(span) + floor,
 		Level:   r.Int(30) + 1 + levelBonus,
 	}
-	v.Size = size(r, form)
+	var sizeRoll float64
+	v.Size, sizeRoll = size(r, form)
 
 	return Draw{
 		Values:    v,
 		DittoRoll: dittoRoll,
+		SizeRoll:  sizeRoll,
 		gen:       *r,
 	}
 }
@@ -99,10 +117,12 @@ func For(encounterID uint64, weatherBoosted bool, form int32) Draw {
 //
 // The move indices continue the walk as for an ordinary encounter and match
 // where the game draws them. An event can fix (pin) a strong species' move,
-// often outside its pool; a pinned slot takes no draw, so a pinned quick move
-// shifts the charged draw into the quick move's position. Such moves are
-// wrong until an encounter corrects them, as event moves are for ordinary
-// spawns; checkDerivation logs them so a pin list can be built from the logs.
+// often outside its pool. A pin is a server override applied after the
+// normal walk: the walk is unchanged and no draw is skipped or shifted, so
+// every other value still matches (2026-11-15: forced charged moves, with
+// IVs, level, size and the quick move all agreeing). Such moves are wrong
+// until an encounter corrects them, as event moves are for ordinary spawns;
+// checkDerivation logs them and the derivation modifier learner pins them.
 //
 // Checked against a scanner export of GO Wild Area 2025 (44,078 strong
 // encounters) and two further datasets.
@@ -128,11 +148,13 @@ func ForStrong(encounterID uint64, weatherBoosted bool, form int32) Draw {
 		Stamina: r.Int(3) + 13,
 		Level:   r.Int(5) + levelBase,
 	}
-	v.Size = strongSize(r, form)
+	var sizeRoll float64
+	v.Size, sizeRoll = strongSize(r, form)
 
 	return Draw{
 		Values:    v,
 		DittoRoll: dittoRoll,
+		SizeRoll:  sizeRoll,
 		gen:       *r,
 	}
 }
@@ -145,16 +167,15 @@ const strongSizeCut = 0.8
 // strongSize is size for a strong encounter: the same draws, but only XL or
 // XXL. A form with a fixed size keeps it, as for an ordinary encounter; no
 // strong Pumpkaboo or Gourgeist has been observed to confirm that either way.
-func strongSize(r *javarandom.Random, form int32) int32 {
+// It also returns the raw roll.
+func strongSize(r *javarandom.Random, form int32) (int32, float64) {
 	r.Gaussian()
-	rolled := SizeXXL
-	if r.Double() < strongSizeCut {
-		rolled = SizeXL
-	}
+	roll := r.Double()
+	rolled := ClassifySize(roll, true)
 	if override, ok := formSizes[form]; ok {
-		return override
+		return override, roll
 	}
-	return rolled
+	return rolled, roll
 }
 
 // Derive is For or ForStrong, chosen by whether the encounter is strong.
@@ -192,19 +213,21 @@ func DittoCandidateRoll(encounterID uint64) float32 {
 	return roll
 }
 
-func size(r *javarandom.Random, form int32) int32 {
+// size returns the size class and the raw roll it was cut from.
+func size(r *javarandom.Random, form int32) (int32, float64) {
 	// The Gaussian draw is discarded, but it advances the generator a variable
 	// number of times and so must be taken before the size roll.
 	r.Gaussian()
 
 	// nextDouble, not nextFloat: the size roll is the full 53-bit draw, and
 	// it consumes two advances.
-	rolled := classifySize(r.Double())
+	roll := r.Double()
+	rolled := classifySize(roll)
 
 	if override, ok := formSizes[form]; ok {
-		return override
+		return override, roll
 	}
-	return rolled
+	return rolled, roll
 }
 
 // MoveIndices draws the quick- and charged-move pool indices, continuing the
@@ -223,6 +246,19 @@ func (d *Draw) MoveIndices(quickPoolSize, chargedPoolSize int32) (quickIndex, ch
 	}
 	d.moveIndicesDrawn = true
 	return d.gen.Int(quickPoolSize), d.gen.Int(chargedPoolSize)
+}
+
+// ClassifySize is the size class the game's cuts give roll, for a strong
+// encounter (XL or XXL, cut at strongSizeCut) or an ordinary one. It
+// ignores any form-fixed size.
+func ClassifySize(roll float64, strong bool) int32 {
+	if !strong {
+		return classifySize(roll)
+	}
+	if roll < strongSizeCut {
+		return SizeXL
+	}
+	return SizeXXL
 }
 
 // classifySize maps a roll in [0,1) to a size class. Separate from size so

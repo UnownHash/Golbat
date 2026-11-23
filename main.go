@@ -186,12 +186,14 @@ func main() {
 	// Derivation needs ohbem too: CP is computed from the derived IVs and
 	// level, so without it a derived pokemon has IVs but no CP.
 	needsOhbem := cfg.Pvp.Enabled || cfg.DeriveIv
-	// DeriveIv resolves move pools through the masterfile, and DerivationLog
-	// resolves the disguise's boosted weathers through it. Both paths check
-	// its Initialized guard and silently skip their work when it was never
-	// loaded.
+	// DeriveIv resolves move pools through the masterfile, DerivationLog
+	// resolves the disguise's boosted weathers through it, and
+	// DerivationEvents and DerivationModifiers check moves against the
+	// pools. All paths check its Initialized guard and silently skip their
+	// work when it was never loaded.
 	needsMasterfile := needsOhbem || cfg.Weather.ProactiveIVSwitching ||
-		cfg.DeriveIv || cfg.DerivationLog
+		cfg.DeriveIv || cfg.DerivationLog || cfg.DerivationEvents.Enabled ||
+		cfg.DerivationModifiers.Enabled
 	if needsMasterfile {
 		if err := decoder.EnsureMasterFileData(); err != nil {
 			log.Fatalf("Unable to initialise MasterFile: %v", err)
@@ -209,6 +211,12 @@ func main() {
 		if err := decoder.WatchMasterFileData(); err != nil {
 			log.Warnf("MasterFile watcher failed: %v", err)
 		}
+	}
+	if err := decoder.InitDerivationEvents(); err != nil {
+		log.Errorf("[DERIVE_EVENTS] derivation events log disabled: %v", err)
+	}
+	if err := decoder.InitDerivationModifiers(); err != nil {
+		log.Errorf("[DERIVE_MODIFIER] derivation modifier learner disabled: %v", err)
 	}
 	decoder.LoadStatsGeofences()
 	decoder.InitWriteBehindQueue(ctx, dbDetails)
@@ -437,6 +445,8 @@ func main() {
 
 	log.Info("go routines have exited, flushing write-behind queue...")
 	decoder.FlushWriteBehindQueue()
+	decoder.FlushDerivationEvents()
+	decoder.FlushDerivationModifiers()
 
 	// Preserve in-memory pokemon if enabled and not skipped via API
 	if cfg.PreserveInMemoryPokemon && cfg.PokemonMemoryOnly {

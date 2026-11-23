@@ -57,6 +57,17 @@ func ReadConfig(configPath string) (configDefinition, error) {
 			MaxAge:            30,
 			Compress:          true,
 		},
+		DerivationEvents: derivationEvents{
+			Dir:           "logs",
+			BucketMinutes: 15,
+			RetainDays:    14,
+		},
+		DerivationModifiers: derivationModifiers{
+			Start:         3,
+			Confirm:       10,
+			WindowSeconds: 1800,
+			UnseenSeconds: 3600,
+		},
 		Cleanup: cleanup{
 			Pokemon:        true,
 			Quests:         true,
@@ -129,6 +140,12 @@ func ReadConfig(configPath string) (configDefinition, error) {
 
 	if envLoadingErr != nil {
 		fmt.Println(fmt.Errorf("%w", envLoadingErr))
+	}
+
+	for _, key := range []string{"derivation_modifiers.end", "derivation_modifiers.zone_wide_cells"} {
+		if k.Exists(key) {
+			fmt.Printf("config: %s is no longer used and is ignored; remove it\n", key)
+		}
 	}
 
 	unmarshalError := k.Unmarshal("", &Config)

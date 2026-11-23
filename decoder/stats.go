@@ -288,6 +288,9 @@ func StartWorkerBacklogReporter() {
 			if tappableTreeEvictor != nil {
 				sc.SetWorkerBacklog("tree_evictor_tappable", float64(tappableTreeEvictor.QueueLen()))
 			}
+			if r := derivationModifierRuntime; r != nil {
+				sc.SetWorkerBacklog("derivation_modifiers", float64(r.QueueLen()))
+			}
 		}
 	}()
 }

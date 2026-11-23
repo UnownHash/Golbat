@@ -762,7 +762,7 @@ func TestHumaStatusRoute(t *testing.T) {
 		t.Fatalf("fim on: got %d, want 200; body=%s", resp.Code, resp.Body.String())
 	}
 	body := resp.Body.String()
-	for _, want := range []string{`"fort_in_memory":true`, `"max_pokemon_results":3000`, `"max_fort_results":4000`, `"max_tappable_results":5000`, `"tappable_scan":true`} {
+	for _, want := range []string{`"fort_in_memory":true`, `"max_pokemon_results":3000`, `"max_fort_results":4000`, `"max_tappable_results":5000`, `"tappable_scan":true`, `"derivation_modifiers":false`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body missing %s: %s", want, body)
 		}
@@ -780,5 +780,33 @@ func TestHumaStatusRoute(t *testing.T) {
 		if !parsed.Filters[name] {
 			t.Errorf("status filters.%s = %v, want true; body=%s", name, parsed.Filters[name], body)
 		}
+	}
+}
+
+func TestHumaDerivationModifiersRoute(t *testing.T) {
+	prevSecret := config.Config.ApiSecret
+	config.Config.ApiSecret = "topsecret"
+	defer func() { config.Config.ApiSecret = prevSecret }()
+
+	_, api := humatest.New(t, newHumaConfig("test"))
+	api.UseMiddleware(golbatSecretMiddleware(api))
+	registerStatusRoutes(api)
+
+	if resp := api.Get("/api/derivation/modifiers"); resp.Code != http.StatusUnauthorized {
+		t.Errorf("no secret: got %d, want 401", resp.Code)
+	}
+	resp := api.Get("/api/derivation/modifiers", "X-Golbat-Secret: topsecret")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("got %d, want 200; body=%s", resp.Code, resp.Body.String())
+	}
+	var body struct {
+		Version   int   `json:"version"`
+		Modifiers []any `json:"modifiers"`
+	}
+	if err := gojson.Unmarshal(resp.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Version != 1 || body.Modifiers == nil || len(body.Modifiers) != 0 {
+		t.Errorf("body %s", resp.Body.String())
 	}
 }

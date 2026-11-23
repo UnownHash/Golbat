@@ -148,7 +148,8 @@ instead of probing gated endpoints.
 {
   "features": {
     "fort_in_memory": true,
-    "tappable_scan": true
+    "tappable_scan": true,
+    "derivation_modifiers": false
   },
   "limits": {
     "max_pokemon_results": 3000,
@@ -173,6 +174,7 @@ older Golbat that predates the key reports.
 |-----|---------|
 | `features.fort_in_memory` | The in-memory fort index is on (`fort_in_memory` config). Without it the [fort scans](#fort-scans) and [fort availability](#fort-availability) endpoints return 503, and pokestop by-id reads carry no `invasions`. |
 | `features.tappable_scan` | `/api/tappable/scan` and `/api/tappable/available` exist. Always true on builds that have the key. |
+| `features.derivation_modifiers` | The derivation modifier learner is running, so `/api/derivation/modifiers` lists modifiers (it returns an empty list otherwise). |
 | `limits.max_pokemon_results` | `tuning.max_pokemon_results`: the cap on pokemon scan/search results per request. |
 | `limits.max_fort_results` | `tuning.max_fort_results`: the cap on fort scan results per request (and per type group on `/api/fort/scan`). |
 | `limits.max_tappable_results` | `tuning.max_tappable_results`: the cap on tappable scan results per request. |
@@ -183,6 +185,150 @@ older Golbat that predates the key reports.
 
 New optional capabilities get a new `filters` (or `features`) flag here rather
 than a flag on the endpoint they affect.
+
+**Status Codes:**
+- 200: OK
+
+---
+
+### GET /api/derivation/modifiers
+
+The encounter-derivation modifiers the learner currently holds (candidate and
+confirmed; ended ones are not listed), plus all-strong summaries, in the
+shareable modifiers format with a region. State is in memory only. When the
+learner is off (`features.derivation_modifiers` false) it returns version 1
+with an empty `modifiers` array.
+
+**Authentication:** Required.
+
+**Response:**
+```json
+{
+  "version": 1,
+  "generated_at": "2026-11-17T12:00:00Z",
+  "modifiers": [
+    {
+      "id": "2026-11-15-move_pin-strong-959-3272-charged-494",
+      "scope": {"strong": true, "pokemon": [{"id": 959, "form": 3272}]},
+      "window": {"start": "2026-11-15T09:00:00Z", "end": null, "time_basis": "utc"},
+      "effect": {"type": "move_pin", "slot": "charged", "move": 494},
+      "status": "confirmed",
+      "applied": true,
+      "paused": false,
+      "evidence": {"observations": 14, "contradictions": 0},
+      "region": {"zone": "Europe/London", "zone_wide": true,
+                 "cells": ["487604c5"], "excluded": ["487604c7"]}
+    }
+  ]
+}
+```
+
+- `id` is `<start date>-<type>-<scope>-<effect>`. It names the effect, not the
+  zone, so it appears once per timezone where the modifier is active;
+  `region.zone` tells them apart. The list is sorted by `id`, then `region.zone`.
+  Scope is `<id>-<form>`, prefixed `strong-` for strong pokemon;
+  `all-strong` is a summary (no `scope.pokemon`, see below). The effect part
+  is `delta<±n>`, `<slot>-<move>` or, for `size_cutoffs`, the boundary
+  (`1/2`, `2/3`, `3/4` or `4/5`, with the slash), as in
+  `2026-11-15-size_cutoffs-19-0-1/2`.
+- `effect` is `{"type":"level_offset","delta":n}`,
+  `{"type":"move_pin","slot":"quick|charged","move":id}` or
+  `{"type":"size_cutoffs","boundaries":{"1/2":[lo,hi]}}` (a null end is
+  unbounded) or `{"type":"unexplained"}` (IVs disagree, so derivation for the
+  scope is suppressed; its id has no effect part). Each moved size cut is
+  its own modifier, with its own evidence, region and lifecycle, so
+  `boundaries` holds exactly one boundary; an event that moves two cuts is
+  listed as two modifiers.
+- `status` is `candidate` or `confirmed`; `window.end` is always null.
+- `region` is judged per timezone. Only zone-wide coverage is applied;
+  venue cells are detection evidence, listed and never applied.
+  - `zone_wide` (a global event): over the zone's last 16 located checks of
+    the scope that are no older than `unseen_seconds` (neutral pin
+    agreements aside: a check whose base move is the pinned move says
+    nothing about that pin; to a pin of another move it is an agreement),
+    at least `confirm` are fresh, its effect is at least three quarters of
+    them, its matches come from at least 8 distinct level-14 cells, two of
+    them at least 10 km apart (centre to centre), and the zone is known. A
+    scan area smaller than 10 km is never zone-wide. A confirmed zone-wide
+    modifier stays on with less (sampled encounters arrive at random, and
+    an event's first and last spawns are mixed with base ones): at least
+    `start` fresh checks, more than half of them its effect, matches from
+    at least `start` cells (8 when `start` is more) with a 10 km pair.
+    Checks age out individually, so an event that ended stops applying
+    within `unseen_seconds`.
+  - `excluded` lists the level-14 cells a zone-wide modifier does not
+    cover: their latest check was not this effect (an agreement or another
+    effect; for size, a roll that disproves the boundary there). A cell
+    stays excluded for the modifier's life until a match in that cell,
+    whatever happens to the 16-check record meanwhile. For size the cell
+    keeps the disproving roll and is readmitted only by a roll there that
+    contradicts it: one classified under the cut at or above a disproving
+    roll classified over it, or the reverse. Any other match fits a cut
+    between the two rolls, local to the cell, and until the cell is
+    readmitted its rolls are no evidence for the zone: they do not narrow
+    the boundary's interval, count as matches or lift a pause. At most 256, or 1% of the
+    level-14 cells seen in the zone when that is more, up to 4096: one more
+    turns zone-wide off for good, which ends a confirmed modifier (usually
+    `agreement`) and a candidate (`unconfirmed`; fresh deviations open a
+    new one). Listed only while zone-wide.
+  - `cells` (a ticketed venue): the level-14 S2 cells with two matches and
+    no agreement or other effect in that cell since. One agreement or other
+    effect there removes the cell at once; so does `unseen_seconds` without
+    a match there. At most 1024 per modifier. Listed for detection only:
+    a modifier with venue cells alone is never applied and never confirms.
+  `cells` and `excluded` are sorted tokens, empty (never null) when there are
+  none.
+- Lifecycle: `start` matching deviations (default 3) within `window_seconds`
+  open a candidate. It is confirmed when it is zone-wide and has had
+  `confirm` located matches (default 10). A candidate not confirmed within
+  2 × `unseen_seconds` of its start ends (`unconfirmed`) and is never
+  confirmed after that; fresh deviations open a new one. A confirmed modifier ends, and drops out of this list, as
+  soon as it is not zone-wide: reason `unseen` when too few fresh checks are
+  left (or its scope was not seen where it covers for `unseen_seconds`),
+  `contradicted` when the latest fresh check showed another effect, else
+  `agreement`. Sightings do not keep a modifier alive beyond its checks. A
+  size modifier has no venue cells: its record takes a deviation across its
+  boundary as a match, a contrary roll (one its interval refuses that the
+  base cut classifies) as an agreement and any other roll the interval
+  refuses as another effect, and every IV-agreeing located roll of the
+  scope ages it. Ended modifiers appear only in the `[DERIVE_MODIFIER]`
+  log, with the end reason.
+- `paused` is true when the zone's last two located checks that say
+  anything about the modifier were not its effect (the base value, or
+  another effect: another delta or move, a size roll its interval
+  refuses), with no match between or since (a check without a cell, one from
+  a cell already in `excluded`, or a pin-equal move agreement neither
+  counts nor resets). Every event seen
+  applied to its whole scope, so a live event does not pause; one that has
+  ended, or was replaced by another effect, is paused at the second such
+  check. A paused modifier stays listed with its
+  region and is not applied; where it covers, its dimension is withheld
+  rather than derived at the base value: a level offset leaves the record
+  with no derived level or IVs, a move pin leaves its slot empty, a size
+  boundary leaves the size empty. The next located match lifts the pause.
+  `unexplained` never pauses (it already withholds everything).
+- All-strong summary: when two or more strong species have an active
+  (candidate or confirmed) level offset with the same delta in one zone, an
+  extra entry with scope `{"strong": true}` and id
+  `<start date>-level_offset-all-strong-delta<±n>` reports them together
+  (detection only). Its status is `confirmed` when at least two of those
+  species are confirmed, else `candidate`; its start is the earliest of
+  theirs, its evidence their sum, and its region what they cover together
+  (`zone_wide` if one is, the union of their cells, no excluded cells). Its
+  id carries the earliest member's start date, so it can change when that
+  member ends.
+- `applied` is true when derivation applies the modifier: confirmed,
+  zone-wide, not paused and not an all-strong summary (an all-strong offset
+  is never applied; each strong species' own offset is). Modifiers of
+  different types combine on one record; an `unexplained` one suppresses
+  derivation for the scope. A record's zone has at most one applied modifier
+  per type and slot, or size boundary (zone-wide needs its share of the
+  zone record). A scope's applied size boundaries combine per cell: a
+  boundary that does not cover the cell (excluded there, or not applied)
+  leaves its cut at the base value, and when an applied interval passes
+  another cut (base or another interval) no size is derived in that cell.
+  An interval with no upper end is held to this by its lower end, which no
+  later cut's known bound may lie under.
 
 **Status Codes:**
 - 200: OK

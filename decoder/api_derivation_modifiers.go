@@ -1,0 +1,166 @@
+package decoder
+
+import (
+	"cmp"
+	"fmt"
+	"maps"
+	"slices"
+	"strings"
+	"time"
+
+	"github.com/golang/geo/s2"
+)
+
+// ApiDerivationModifiers is the shareable snapshot of the active derivation
+// modifiers (design 2026-11-15 §6, plus region).
+type ApiDerivationModifiers struct {
+	Version     int                     `json:"version" doc:"Format version (1)"`
+	GeneratedAt string                  `json:"generated_at" doc:"RFC 3339 UTC time the snapshot was taken"`
+	Modifiers   []ApiDerivationModifier `json:"modifiers" doc:"Active (candidate and confirmed) modifiers and all-strong summaries, sorted by id then zone; empty when the learner is off"`
+}
+
+type ApiDerivationModifier struct {
+	ID       string              `json:"id" doc:"<start date>-<type>-<scope>-<effect>; the effect part of a size_cutoffs id is its boundary (1/2 .. 4/5)"`
+	Scope    ApiModifierScope    `json:"scope"`
+	Window   ApiModifierWindow   `json:"window"`
+	Effect   map[string]any      `json:"effect" doc:"level_offset {type, delta}, move_pin {type, slot, move} or size_cutoffs {type, boundaries: {cut: [lo, hi]}} (one boundary per modifier) with null for an unbounded end, or unexplained {type}"`
+	Status   string              `json:"status" doc:"candidate or confirmed"`
+	Applied  bool                `json:"applied" doc:"The derive path applies it: confirmed, zone-wide, not paused and not an all-strong summary. Venue cells alone are never applied"`
+	Paused   bool                `json:"paused" doc:"The zone's last two checks that say anything about it were not its effect (the base value or another effect), with no match since: until the next match its dimension is withheld where it covers (no level and IVs, no move in its slot, or no size), not derived at the base value. Never true for unexplained"`
+	Evidence ApiModifierEvidence `json:"evidence"`
+	Region   ApiModifierRegion   `json:"region"`
+}
+
+type ApiModifierScope struct {
+	Strong  bool                 `json:"strong"`
+	Pokemon []ApiModifierPokemon `json:"pokemon,omitempty" doc:"Absent for an all-strong summary (two or more strong species at one level offset in one zone)"`
+}
+
+type ApiModifierPokemon struct {
+	ID   int32 `json:"id"`
+	Form int32 `json:"form"`
+}
+
+type ApiModifierWindow struct {
+	Start     string  `json:"start" doc:"RFC 3339 UTC"`
+	End       *string `json:"end" doc:"Always null: ended modifiers are not listed"`
+	TimeBasis string  `json:"time_basis"`
+}
+
+type ApiModifierEvidence struct {
+	Observations   int `json:"observations"`
+	Contradictions int `json:"contradictions"`
+}
+
+// ApiModifierRegion is where the modifier was seen and applies (design §9):
+// an applied modifier covers its zone less the excluded cells; venue cells
+// are detection evidence, listed and never applied.
+type ApiModifierRegion struct {
+	Zone     string   `json:"zone" doc:"IANA timezone"`
+	ZoneWide bool     `json:"zone_wide" doc:"Covers the whole zone except the excluded cells: matches from at least 8 level-14 cells, two of them at least 10 km apart, hold their share of the zone's recent checks (three quarters to turn on, more than half to stay). The only coverage the derive path applies"`
+	Cells    []string `json:"cells" doc:"Venue cells (level-14 S2 cell tokens): two matches and no other result there since. Detection evidence only, never applied; sorted, empty when none"`
+	Excluded []string `json:"excluded" doc:"Level-14 cells a zone-wide modifier does not cover: their latest check disproved it, until a match there (for size_cutoffs, a roll there that contradicts the disproving one). At most 256, or 1% of the cells seen in the zone when that is more, up to 4096. Sorted; empty when none or not zone-wide"`
+}
+
+// cellTokens is cells' tokens, sorted; empty, never nil.
+func cellTokens[S ~[]s2.CellID](cells S) []string {
+	out := make([]string, 0, len(cells))
+	for _, c := range cells {
+		out = append(out, c.ToToken())
+	}
+	slices.Sort(out)
+	return out
+}
+
+const apiModifierTimeFormat = "2006-01-02T15:04:05Z"
+
+func apiModifierID(m *derivationModifier) string {
+	var scope string
+	if m.Scope.AllStrong {
+		scope = "all"
+		if m.Scope.Strong {
+			scope = "all-strong"
+		}
+	} else {
+		scope = fmt.Sprintf("%d-%d", m.Scope.PokemonID, m.Scope.Form)
+		if m.Scope.Strong {
+			scope = "strong-" + scope
+		}
+	}
+	effect := ""
+	switch m.Type {
+	case modMovePin:
+		effect = fmt.Sprintf("%s-%d", m.Effect.Slot, m.Effect.Move)
+	case modLevelOffset:
+		effect = fmt.Sprintf("delta%+d", m.Effect.Delta)
+	case modSizeCutoffs:
+		effect = m.Effect.Cut
+	}
+	parts := []string{m.Start.UTC().Format("2006-01-02"), m.Type.String(), scope}
+	if effect != "" {
+		parts = append(parts, effect)
+	}
+	return strings.Join(parts, "-")
+}
+
+func apiModifierEffect(m *derivationModifier) map[string]any {
+	e := map[string]any{"type": m.Type.String()}
+	switch m.Type {
+	case modLevelOffset:
+		e["delta"] = m.Effect.Delta
+	case modMovePin:
+		e["slot"] = m.Effect.Slot
+		e["move"] = m.Effect.Move
+	case modSizeCutoffs:
+		var lo, hi *float64
+		if m.Interval.HasLo {
+			lo = &m.Interval.Lo
+		}
+		if m.Interval.HasHi {
+			hi = &m.Interval.Hi
+		}
+		e["boundaries"] = map[string][2]*float64{m.Effect.Cut: {lo, hi}}
+	}
+	return e
+}
+
+// GetApiDerivationModifiers lists the active modifiers as of now. With the
+// learner off it returns an empty list.
+func GetApiDerivationModifiers(now time.Time) *ApiDerivationModifiers {
+	out := &ApiDerivationModifiers{Version: 1, GeneratedAt: now.UTC().Format(apiModifierTimeFormat),
+		Modifiers: []ApiDerivationModifier{}}
+	snap := derivationModifierSnapshot.Load()
+	if snap == nil {
+		return out
+	}
+	for _, m := range slices.Concat(snap.active, snap.summaries) {
+		am := ApiDerivationModifier{
+			ID:      apiModifierID(m),
+			Scope:   ApiModifierScope{Strong: m.Scope.Strong},
+			Window:  ApiModifierWindow{Start: m.Start.UTC().Format(apiModifierTimeFormat), TimeBasis: "utc"},
+			Effect:  apiModifierEffect(m),
+			Status:  m.Status.String(),
+			Applied: modifierApplied(m),
+			Paused:  m.Paused,
+			Evidence: ApiModifierEvidence{Observations: m.Observations,
+				Contradictions: m.Contradictions},
+			Region: ApiModifierRegion{Zone: m.Zone, ZoneWide: m.ZoneWide,
+				Cells: cellTokens(slices.Collect(maps.Keys(m.Cells)))},
+		}
+		// The excluded cells are kept while not zone-wide but mean nothing
+		// to a reader then.
+		var excluded []s2.CellID
+		if m.ZoneWide {
+			excluded = slices.Collect(maps.Keys(m.Excluded))
+		}
+		am.Region.Excluded = cellTokens(excluded)
+		if !m.Scope.AllStrong {
+			am.Scope.Pokemon = []ApiModifierPokemon{{ID: m.Scope.PokemonID, Form: m.Scope.Form}}
+		}
+		out.Modifiers = append(out.Modifiers, am)
+	}
+	slices.SortFunc(out.Modifiers, func(a, b ApiDerivationModifier) int {
+		return cmp.Or(strings.Compare(a.ID, b.ID), strings.Compare(a.Region.Zone, b.Region.Zone))
+	})
+	return out
+}
