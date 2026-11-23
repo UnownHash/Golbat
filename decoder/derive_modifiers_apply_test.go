@@ -99,8 +99,8 @@ func TestDerivationAdjustLevelOffset(t *testing.T) {
 }
 
 // A confirmed all-strong +5 is detected and listed but never applied: a
-// strong species at base levels kept getting +5 (design §7). It still gates
-// sightings of strong scopes.
+// strong species at base levels kept getting +5 (design §7). (The learner
+// no longer produces one; modifierApplied still refuses it.)
 func TestDerivationAdjustAllStrongNotApplied(t *testing.T) {
 	withDeriveIv(t, true)
 	withDeriveStrong(t, true)
@@ -114,9 +114,6 @@ func TestDerivationAdjustAllStrongNotApplied(t *testing.T) {
 	}
 	if adj := idx.lookup(1, 0, true, adjCellA, modifierZoneOf); adj.LevelDelta != 0 || adj.Suppress {
 		t.Errorf("lookup = %+v, want zero", adj)
-	}
-	if !idx.wantsSighting(1, 0, true) {
-		t.Error("all-strong confirmed: strong sighting not wanted")
 	}
 }
 
@@ -484,8 +481,8 @@ func TestModifierIndexWantsSighting(t *testing.T) {
 	all := levelMod(allStrongScope, 5, adjZoneA, cellSet(adjCellA))
 	all.Status = modCandidate
 	idx = buildModifierIndex([]*derivationModifier{all})
-	if !idx.wantsSighting(635, 0, true) || idx.wantsSighting(635, 0, false) {
-		t.Error("all-strong candidate: want any strong scope, no ordinary one")
+	if idx.wantsSighting(635, 0, true) || idx.wantsSighting(635, 0, false) {
+		t.Error("an all-strong modifier gates no species' sightings")
 	}
 	if buildModifierIndex(nil) != nil {
 		t.Error("empty mods built a non-nil index")

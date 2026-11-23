@@ -241,7 +241,8 @@ new one forms from fresh deviations). Confirmed: `confirm` located matches
 while zone-wide, or `confirm` matches inside covered venue cells (counting
 only matches in covered cells: noise covers a cell now and then but does not
 accumulate there). Ended: neither coverage on after confirming (reason
-`agreement`, or `contradicted` when another effect took the last covered
+`agreement`, or `contradicted` when another effect took its last coverage:
+zone-wide lost with another effect as the latest check, or its last covered
 venue cell), or `unseen` (coverage lapsed with no check or match, or the
 scope not seen where it covers). Sightings no longer extend a modifier's
 life: they can only feed the last-seen end, which fires no later than the

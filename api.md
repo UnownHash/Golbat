@@ -236,7 +236,8 @@ with an empty `modifiers` array.
 - `region` is where the modifier covers a record, judged per timezone at two
   scales:
   - `zone_wide` (a global event): its effect is more than half of the zone's
-    last 16 located checks of the scope, the record holds at least `confirm`
+    last 16 located checks of the scope (neutral pin agreements aside: a
+    check whose base move is the pinned move says nothing), the record holds at least `confirm`
     of them, its matches lie under at least two ~10 km (level-10) S2 cells,
     and the zone is known. It turns off as soon as that fails, or when the
     zone has had no located check of the scope for `unseen_seconds`.
@@ -257,8 +258,9 @@ with an empty `modifiers` array.
   never confirms). A candidate not confirmed within `unseen_seconds` of its
   start ends (`unconfirmed`); fresh deviations open a new one. A confirmed
   modifier ends, and drops out of this list, when it covers nothing: reason
-  `agreement` when checks took its coverage, `contradicted` when its last
-  covered venue cell went to another effect, `unseen` when its coverage
+  `agreement` when checks took its coverage, `contradicted` when another
+  effect took its last coverage (zone-wide lost with another effect as the
+  latest check, or its last covered venue cell), `unseen` when its coverage
   lapsed for lack of checks or matches or its scope was not seen where it
   covers for `unseen_seconds`. Sightings do not keep a modifier alive beyond
   its checks. A size modifier is zone-wide only (no venue cells): its record
@@ -274,7 +276,9 @@ with an empty `modifiers` array.
   (detection only). Its status is `confirmed` when at least two of those
   species are confirmed, else `candidate`; its start is the earliest of
   theirs, its evidence their sum, and its region what they cover together
-  (`zone_wide` if one is, the union of their cells, no excluded cells).
+  (`zone_wide` if one is, the union of their cells, no excluded cells). Its
+  id carries the earliest member's start date, so it can change when that
+  member ends.
 - `applied` is true when derivation applies the modifier: confirmed and not
   an all-strong summary (an all-strong offset is never applied; each strong
   species' own offset is). Where two confirmed modifiers of one type and slot

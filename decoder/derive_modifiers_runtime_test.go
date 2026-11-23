@@ -864,7 +864,7 @@ func TestDerivationModifiersRuntimePublishesAllStrongSummary(t *testing.T) {
 	if len(summary) != 1 || summary[0].Status != "confirmed" || summary[0].Applied {
 		t.Fatalf("summaries %+v, want one confirmed, unapplied", summary)
 	}
-	if idx := derivationModifierIndex.Load(); idx.anyAllStrong || idx.wantsSighting(635, 0, true) {
+	if idx := derivationModifierIndex.Load(); idx.wantsSighting(635, 0, true) {
 		t.Error("the summary reached the index")
 	}
 	if n := len(activeDerivationModifiers()); n != 2 {

@@ -63,10 +63,9 @@ type modifierIndex struct {
 	// never applied (design §7) and have no entry.
 	confirmed map[modifierScope][]modifierEntry
 	// active holds the species scopes with a candidate or confirmed
-	// modifier that covers something; anyAllStrong whether an all-strong one
-	// is active.
-	active       map[modifierScope]struct{}
-	anyAllStrong bool
+	// modifier that covers something. The learner tracks no all-strong
+	// modifier, and all-strong summaries never reach the index.
+	active map[modifierScope]struct{}
 }
 
 // modifierApplied reports whether the derive path applies m: confirmed and
@@ -92,10 +91,7 @@ func buildModifierIndex(mods []*derivationModifier) *modifierIndex {
 		n++
 		// A sighting only marks a modifier seen where it covers: one with no
 		// coverage (a candidate from scattered noise) wants none.
-		switch {
-		case m.Scope.AllStrong:
-			idx.anyAllStrong = true
-		case m.ZoneWide || len(m.Cells) > 0:
+		if m.ZoneWide || len(m.Cells) > 0 {
 			idx.active[m.Scope] = struct{}{}
 		}
 		if !modifierApplied(m) {
@@ -115,14 +111,10 @@ func buildModifierIndex(mods []*derivationModifier) *modifierIndex {
 }
 
 // wantsSighting reports whether a first sighting of the scope feeds an
-// active modifier: its species scope is active, or it is strong and an
-// all-strong modifier is.
+// active modifier: its species scope is active.
 func (idx *modifierIndex) wantsSighting(pokemonID, form int32, strong bool) bool {
 	if idx == nil {
 		return false
-	}
-	if strong && idx.anyAllStrong {
-		return true
 	}
 	_, ok := idx.active[modifierScope{PokemonID: pokemonID, Form: form, Strong: strong}]
 	return ok
