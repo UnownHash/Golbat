@@ -148,7 +148,7 @@ func TestGymToProto(t *testing.T) {
 		RaidPokemonMove1: ptr(int64(10)), RaidPokemonMove2: ptr(int64(20)), RaidPokemonForm: ptr(int64(1)), RaidPokemonAlignment: ptr(int64(0)), RaidPokemonCp: ptr(int64(45000)), RaidIsExclusive: ptr(int64(0)),
 		CellId: ptr(int64(99)), Deleted: false, TotalCp: ptr(int64(9000)), FirstSeenTimestamp: 6, RaidPokemonGender: ptr(int64(1)), SponsorId: ptr(int64(7)), PartnerId: ptr("p"),
 		RaidPokemonCostume: ptr(int64(0)), RaidPokemonEvolution: ptr(int64(1)), ArScanEligible: ptr(int64(1)), PowerUpLevel: ptr(int64(2)), PowerUpPoints: ptr(int64(50)), PowerUpEndTimestamp: ptr(int64(8)),
-		Description: ptr("desc"), Defenders: ApiGymDefendersRaw(`[{"pokemon_id":25}]`), Rsvps: rawMsg(`{"going":1}`),
+		Description: ptr("desc"), Defenders: ApiGymDefendersRaw(`[{"pokemon_id":25}]`), Rsvps: rawMsg(`{"going":1}`), Images: rawMsg(`[{"image_id":"i1"}]`),
 	}
 	got := gymToProto(&g)
 	if got.Id != g.Id || got.Lat != 40 || got.Lon != -70 || got.GetName() != "Gym" || got.GetUrl() != "https://img/gym.png" {
@@ -163,7 +163,7 @@ func TestGymToProto(t *testing.T) {
 	if got.ExRaidEligible == nil || *got.ExRaidEligible != 0 || got.InBattle == nil || got.RaidIsExclusive == nil || got.RaidPokemonAlignment == nil || got.RaidPokemonCostume == nil {
 		t.Error("zero-valued present int64 pointers must stay present")
 	}
-	if got.GetGuardingPokemonDisplayJson() != `{"gender":1}` || got.GetDefendersJson() != `[{"pokemon_id":25}]` || got.GetRsvpsJson() != `{"going":1}` {
+	if got.GetGuardingPokemonDisplayJson() != `{"gender":1}` || got.GetDefendersJson() != `[{"pokemon_id":25}]` || got.GetRsvpsJson() != `{"going":1}` || got.GetImagesJson() != `[{"image_id":"i1"}]` {
 		t.Errorf("json passthrough = %q %q %q", got.GetGuardingPokemonDisplayJson(), got.GetDefendersJson(), got.GetRsvpsJson())
 	}
 	if got.GetDescription() != "desc" || got.GetPartnerId() != "p" || got.GetSponsorId() != 7 || got.GetCellId() != 99 || got.Deleted {
@@ -174,7 +174,7 @@ func TestGymToProto(t *testing.T) {
 	}
 
 	empty := gymToProto(&ApiGymResult{Id: "x"})
-	if empty.Name != nil || empty.GuardingPokemonDisplayJson != nil || empty.DefendersJson != nil || empty.RsvpsJson != nil || empty.RaidPokemonId != nil {
+	if empty.Name != nil || empty.GuardingPokemonDisplayJson != nil || empty.DefendersJson != nil || empty.RsvpsJson != nil || empty.ImagesJson != nil || empty.RaidPokemonId != nil {
 		t.Errorf("nil API fields must be unset: %+v", empty)
 	}
 	assertNoPresentOptionals(t, empty, "id")
@@ -197,7 +197,7 @@ func TestPokestopToProto(t *testing.T) {
 		AlternativeQuestType: ptr(int64(7)), AlternativeQuestTimestamp: ptr(int64(11)), AlternativeQuestTarget: ptr(int64(5)), AlternativeQuestRewardType: ptr(int64(2)), AlternativeQuestItemId: ptr(int64(1)), AlternativeQuestRewardAmount: ptr(int64(3)),
 		AlternativeQuestPokemonId: ptr(int64(1)), AlternativeQuestPokemonFormId: ptr(int64(2)),
 		AlternativeQuestConditions: rawMsg(`[{"type":2}]`), AlternativeQuestRewards: rawMsg(`[{"type":2}]`), AlternativeQuestTemplate: ptr("alt"), AlternativeQuestTitle: ptr("Alt"), AlternativeQuestExpiry: ptr(int64(12)),
-		Description: ptr("d"), ShowcaseFocus: rawMsg(`{"buddy":3}`), ShowcasePokemon: ptr(int64(1)), ShowcasePokemonForm: ptr(int64(2)), ShowcasePokemonType: ptr(int64(3)), ShowcaseRankingStandard: ptr(int64(4)), ShowcaseExpiry: ptr(int64(13)), ShowcaseRankings: rawMsg(`[]`),
+		Description: ptr("d"), ShowcaseFocus: rawMsg(`{"buddy":3}`), ShowcasePokemon: ptr(int64(1)), ShowcasePokemonForm: ptr(int64(2)), ShowcasePokemonType: ptr(int64(3)), ShowcaseRankingStandard: ptr(int64(4)), ShowcaseExpiry: ptr(int64(13)), ShowcaseRankings: rawMsg(`[]`), Images: rawMsg(`[{"image_id":"i2"}]`),
 		Invasions: []ApiPokestopIncident{{
 			Id: "-5", PokestopId: "fedcba9876543210fedcba9876543210.16", DisplayType: 1, Style: 2, Character: 41, StartTime: 14, ExpirationTime: 15, Confirmed: true, Updated: 16,
 			Slot1PokemonId: ptr(int64(1)), Slot1Form: ptr(int64(0)), Slot2PokemonId: ptr(int64(2)),
@@ -213,7 +213,7 @@ func TestPokestopToProto(t *testing.T) {
 	if got.GetQuestType() != 7 || got.GetQuestTarget() != 3 || got.GetQuestRewardType() != 1 || got.QuestItemId == nil || got.GetQuestRewardAmount() != 100 || got.GetQuestPokemonId() != 25 || got.QuestPokemonFormId == nil {
 		t.Errorf("quest = %+v", got)
 	}
-	if got.GetQuestConditionsJson() != `[]` || got.GetQuestRewardsJson() != `[{"type":1}]` || got.GetAlternativeQuestConditionsJson() != `[{"type":2}]` || got.GetAlternativeQuestRewardsJson() != `[{"type":2}]` || got.GetShowcaseFocusJson() != `{"buddy":3}` || got.GetShowcaseRankingsJson() != `[]` {
+	if got.GetQuestConditionsJson() != `[]` || got.GetQuestRewardsJson() != `[{"type":1}]` || got.GetAlternativeQuestConditionsJson() != `[{"type":2}]` || got.GetAlternativeQuestRewardsJson() != `[{"type":2}]` || got.GetShowcaseFocusJson() != `{"buddy":3}` || got.GetShowcaseRankingsJson() != `[]` || got.GetImagesJson() != `[{"image_id":"i2"}]` {
 		t.Errorf("json passthrough = %+v", got)
 	}
 	if got.GetQuestTemplate() != "tmpl" || got.GetQuestTitle() != "title" || got.GetAlternativeQuestTemplate() != "alt" || got.GetAlternativeQuestTitle() != "Alt" || got.GetDescription() != "d" || got.GetPartnerId() != "pp" {

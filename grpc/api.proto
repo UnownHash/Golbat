@@ -324,6 +324,7 @@ message Gym {
   optional string description = 39;
   optional string defenders_json = 40;
   optional string rsvps_json = 41;
+  optional string images_json = 42;
 }
 
 // Mirrors decoder.ApiPokestopResult.
@@ -382,6 +383,7 @@ message Pokestop {
   optional int64 showcase_expiry = 52;
   optional string showcase_rankings_json = 53;
   repeated Incident invasions = 54;
+  optional string images_json = 55;
 }
 
 // Mirrors decoder.ApiStationResult.

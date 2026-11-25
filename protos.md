@@ -149,6 +149,18 @@ Aggregate RSVP counts per location. Gated by `ProcessGyms`. Any location
 whose `maybe_count` and `going_count` are both zero has its RSVP data
 cleared on the gym. Non-`SUCCESS` results are ignored.
 
+### `TitanPlayerSubmissionAction_TITAN_PLAYER_SUBMISSION_ACTION_GET_IMAGES_FOR_POI` *(= 620500)*
+
+Player-submitted photo gallery of a fort, with the votes on each image
+(`num_votes_from_game`, `num_votes_niantic_wide`). Not part of `Method`: it
+arrives under its own id. Stored as JSON in the `images` column of the
+pokestop or gym the `poi_id` belongs to; forts not yet known are skipped. The
+proto request is optional but needed to clear the gallery of a fort that no
+longer has images, since an empty response does not name the fort. Non-`SUCCESS`
+results are ignored. The vote itself
+(`..._SUBMIT_PLAYER_IMAGE_VOTE_FOR_POI`, 620501) only returns a status and is
+not processed.
+
 ## Social actions
 
 The master `ClientAction_CLIENT_ACTION_PROXY_SOCIAL_ACTION` proto is decoded

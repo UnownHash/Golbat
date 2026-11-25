@@ -64,6 +64,7 @@ type ApiPokestopResult struct {
 	ShowcaseRankingStandard       *int64                `json:"showcase_ranking_standard" doc:"Ranking standard of the showcase contest"`
 	ShowcaseExpiry                *int64                `json:"showcase_expiry" doc:"Unix timestamp when the showcase contest expires"`
 	ShowcaseRankings              *json.RawMessage      `json:"showcase_rankings" doc:"Rankings of the most recent showcase contest as native JSON. Retained after the contest ends rather than cleared, so gate on showcase_expiry for liveness. Null only until the pokestop's first observed showcase."`
+	Images                        *json.RawMessage      `json:"images" doc:"Player-submitted photo gallery of the fort as native JSON: a list of {image_id, image_url, creation_timestamp_ms, num_votes_from_game, num_votes_niantic_wide}. Null until a gallery has been seen, or when it is empty."`
 	Invasions                     []ApiPokestopIncident `json:"invasions,omitempty" doc:"Active (unexpired) incidents; omitted when there are none. Attached on by-id reads and, on scans, only when with_incidents is set; both need fort_in_memory, since incidents are resolved through the in-memory fort index."`
 }
 
@@ -122,6 +123,7 @@ func buildPokestopResult(stop *Pokestop) ApiPokestopResult {
 		ShowcaseRankingStandard:       stop.ShowcaseRankingStandard.Ptr(),
 		ShowcaseExpiry:                stop.ShowcaseExpiry.Ptr(),
 		ShowcaseRankings:              jsonRaw(stop.ShowcaseRankings),
+		Images:                        jsonRaw(stop.Images),
 	}
 }
 

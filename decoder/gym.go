@@ -52,6 +52,7 @@ type GymData struct {
 	Description            null.String `db:"description"`
 	Defenders              null.String `db:"defenders"`
 	Rsvps                  null.String `db:"rsvps"`
+	Images                 null.String `db:"images"`
 }
 
 // Gym struct.
@@ -93,6 +94,7 @@ type GymOldValues struct {
 	RaidPokemonId      null.Int
 	RaidSpawnTimestamp null.Int
 	Rsvps              null.String
+	Images             null.String
 	InBattle           null.Int
 }
 
@@ -132,6 +134,7 @@ func (gym *Gym) snapshotOldValues() {
 		RaidPokemonId:      gym.RaidPokemonId,
 		RaidSpawnTimestamp: gym.RaidSpawnTimestamp,
 		Rsvps:              gym.Rsvps,
+		Images:             gym.Images,
 		InBattle:           gym.InBattle,
 	}
 }
@@ -542,6 +545,17 @@ func (gym *Gym) SetRsvps(v null.String) {
 			gym.debug.recordChange(fmt.Sprintf("Rsvps:%s->%s", FormatNull(gym.Rsvps), FormatNull(v)))
 		}
 		gym.Rsvps = v
+		gym.dirty = true
+	}
+}
+
+// SetImages sets the player-submitted photo gallery JSON (see fortImagesJson)
+func (gym *Gym) SetImages(v null.String) {
+	if gym.Images != v {
+		if dbDebugEnabled {
+			gym.debug.recordChange(fmt.Sprintf("Images:%s->%s", FormatNull(gym.Images), FormatNull(v)))
+		}
+		gym.Images = v
 		gym.dirty = true
 	}
 }

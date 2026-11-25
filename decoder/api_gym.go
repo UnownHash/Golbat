@@ -179,6 +179,7 @@ type ApiGymResult struct {
 	Description            *string                  `json:"description" doc:"Description of the gym"`
 	Defenders              ApiGymDefendersRaw       `json:"defenders" doc:"Defender pokemon"`
 	Rsvps                  *json.RawMessage         `json:"rsvps" doc:"Raid RSVP data"`
+	Images                 *json.RawMessage         `json:"images" doc:"Player-submitted photo gallery of the fort as native JSON: a list of {image_id, image_url, creation_timestamp_ms, num_votes_from_game, num_votes_niantic_wide}. Null until a gallery has been seen, or when it is empty."`
 }
 
 func buildGymResult(gym *Gym) ApiGymResult {
@@ -224,6 +225,7 @@ func buildGymResult(gym *Gym) ApiGymResult {
 		Description:            gym.Description.Ptr(),
 		Defenders:              gymDefendersRaw(gym.Defenders),
 		Rsvps:                  jsonRaw(gym.Rsvps),
+		Images:                 jsonRaw(gym.Images),
 	}
 }
 

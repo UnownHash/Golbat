@@ -1070,7 +1070,7 @@ The payload has three variants distinguished by `change_type`:
 #### Firing conditions
 
 - **new**: a pokestop or gym is seen for the first time.
-- **edit**: any of name, description, image URL path, or location differ
+- **edit**: any of name, description, image URL path, photo gallery, or location differ
   between the old snapshot and the current state. At least one of the
   following changes must produce a non-empty `edit_types`, otherwise no
   webhook fires:
@@ -1081,6 +1081,10 @@ The payload has three variants distinguished by `change_type`:
     Example: `https://lh3.googleusercontent.com/X` → `https://lh4.googleusercontent.com/X`
     is *not* reported (domain only). `https://lh3.googleusercontent.com/X` →
     `https://lh3.googleusercontent.com/Y` *is* reported (path changed).
+  - `"images"` — the player-submitted photo gallery changed: an image was
+    added or removed, or a vote count on one moved. The gallery only arrives
+    with `GET_IMAGES_FOR_POI` (see `protos.md`), so this follows how often the
+    scanner opens a fort's gallery, and a popular fort can fire on every vote.
   - `"location"` — latitude or longitude changed beyond `floatTolerance`.
 - **removal**: the fort-tracker detected the fort has been absent from its S2
   cell for longer than the stale threshold.
@@ -1094,7 +1098,7 @@ of the fort as that type yet.
 | JSON field     | Go type        | Description |
 |----------------|----------------|-------------|
 | `change_type`  | string         | `"new"`, `"edit"`, or `"removal"`. |
-| `edit_types`   | []string       | Only present on `"edit"`. Any subset of `["name", "description", "image_url", "location"]`. Omitted if empty. |
+| `edit_types`   | []string       | Only present on `"edit"`. Any subset of `["name", "description", "image_url", "images", "location"]`. Omitted if empty. |
 | `old`          | FortWebhook    | Previous state. Present on `"edit"` and `"removal"`, omitted on `"new"`. |
 | `new`          | FortWebhook    | Current state. Present on `"new"` and `"edit"`, omitted on `"removal"`. |
 
@@ -1107,9 +1111,23 @@ The nested `FortWebhook` object:
 | `name`        | *string   | Fort name. `null` if not set. |
 | `description` | *string   | Fort description. `null` if not set. |
 | `image_url`   | *string   | Fort photo URL. `null` if not set. |
+| `images`      | json.RawMessage | Photo gallery with the votes on each image. See [images structure](#images-structure). `null` until a gallery has been received, and when it is empty. |
 | `location`    | object    | `{"lat": float64, "lon": float64}`. |
 
 The internal `CellId` field is **not** serialized (Go tag `json:"-"`).
+
+#### images structure
+
+Built by `fortImagesJson` in `decoder/fort_images.go`. A list ordered by
+creation time, then id:
+
+| JSON field               | Go type | Description |
+|--------------------------|---------|-------------|
+| `image_id`               | string  | Image ID. |
+| `image_url`              | string  | Image URL. |
+| `creation_timestamp_ms`  | int64   | Submission time, Unix milliseconds. |
+| `num_votes_from_game`    | int32   | Votes cast from Pokémon GO. |
+| `num_votes_niantic_wide` | int32   | Votes across all Niantic games. |
 
 ##### Example — new
 
@@ -1124,6 +1142,7 @@ The internal `CellId` field is **not** serialized (Go tag `json:"-"`).
       "name": "Bronze Statue",
       "description": null,
       "image_url": "https://lh3.googleusercontent.com/...",
+      "images": null,
       "location": { "lat": 37.78, "lon": -122.41 }
     }
   }

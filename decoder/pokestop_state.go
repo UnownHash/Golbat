@@ -31,7 +31,7 @@ const pokestopSelectColumns = `id, lat, lon, name, url, enabled, lure_expire_tim
 	cell_id, deleted, lure_id, sponsor_id, partner_id, first_seen_timestamp,
 	ar_scan_eligible, power_up_points, power_up_level, power_up_end_timestamp,
 	description, showcase_focus, showcase_pokemon_id, showcase_pokemon_form_id,
-	showcase_pokemon_type_id, showcase_ranking_standard, showcase_expiry, showcase_rankings`
+	showcase_pokemon_type_id, showcase_ranking_standard, showcase_expiry, showcase_rankings, images`
 
 func loadPokestopFromDatabase(ctx context.Context, db db.DbDetails, fortId FortId, pokestop *Pokestop) error {
 	if db.GeneralDb == nil {
@@ -212,6 +212,7 @@ func createPokestopFortWebhooks(stop *Pokestop) {
 			Id:          stop.Id.String(),
 			Name:        stop.oldValues.Name.Ptr(),
 			ImageUrl:    stop.oldValues.Url.Ptr(),
+			Images:      jsonRaw(stop.oldValues.Images),
 			Description: stop.oldValues.Description.Ptr(),
 			Location:    Location{Latitude: stop.oldValues.Lat, Longitude: stop.oldValues.Lon},
 		}
@@ -393,7 +394,7 @@ func pokestopWriteDB(db db.DbDetails, pokestop *Pokestop, isNewRecord bool) erro
 				cell_id, lure_id, sponsor_id, partner_id, ar_scan_eligible,
 				power_up_points, power_up_level, power_up_end_timestamp, updated, first_seen_timestamp,
 				description, showcase_focus, showcase_pokemon_id,
-				showcase_pokemon_form_id, showcase_pokemon_type_id, showcase_ranking_standard, showcase_expiry, showcase_rankings
+				showcase_pokemon_form_id, showcase_pokemon_type_id, showcase_ranking_standard, showcase_expiry, showcase_rankings, images
 				)
 				VALUES (
 				:id, :lat, :lon, :name, :url, :enabled, :lure_expire_timestamp, :last_modified_timestamp, :quest_type,
@@ -407,7 +408,7 @@ func pokestopWriteDB(db db.DbDetails, pokestop *Pokestop, isNewRecord bool) erro
 				:power_up_points, :power_up_level, :power_up_end_timestamp,
 				UNIX_TIMESTAMP(), UNIX_TIMESTAMP(),
 				:description, :showcase_focus, :showcase_pokemon_id,
-				:showcase_pokemon_form_id, :showcase_pokemon_type_id, :showcase_ranking_standard, :showcase_expiry, :showcase_rankings)`,
+				:showcase_pokemon_form_id, :showcase_pokemon_type_id, :showcase_ranking_standard, :showcase_expiry, :showcase_rankings, :images)`,
 			pokestop)
 
 		getStatsCollector().IncDbQuery("insert pokestop", err)
@@ -468,7 +469,8 @@ func pokestopWriteDB(db db.DbDetails, pokestop *Pokestop, isNewRecord bool) erro
 				showcase_pokemon_type_id = :showcase_pokemon_type_id,
 				showcase_ranking_standard = :showcase_ranking_standard,
 				showcase_expiry = :showcase_expiry,
-				showcase_rankings = :showcase_rankings
+				showcase_rankings = :showcase_rankings,
+				images = :images
 			WHERE id = :id`,
 			pokestop,
 		)
