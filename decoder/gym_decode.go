@@ -215,6 +215,7 @@ func (gym *Gym) updateGymFromGymInfoOutProto(fortId FortId, gymData *pogo.GymGet
 			Alignment             int                `json:"alignment,omitempty"`
 			Badge                 int                `json:"badge,omitempty"`
 			Background            *int64             `json:"background,omitempty"`
+			TradedTimeMs          int64              `json:"traded_time_ms,omitempty"`
 			DeployedMs            int64              `json:"deployed_ms,omitempty"`
 			DeployedTime          int64              `json:"deployed_time,omitempty"`
 			BattlesWon            int32              `json:"battles_won"`
@@ -249,6 +250,7 @@ func (gym *Gym) updateGymFromGymInfoOutProto(fortId FortId, gymData *pogo.GymGet
 				Badge:                 int(pokemonDisplay.PokemonBadge),
 				Background:            util.ExtractBackgroundFromDisplay(pokemonDisplay),
 				Shiny:                 pokemonDisplay.Shiny,
+				TradedTimeMs:          motivatedPokemon.Pokemon.TradedTimeMs,
 				MotivationNow:         util.RoundedFloat4(motivatedPokemon.MotivationNow),
 				CpNow:                 motivatedPokemon.CpNow,
 				CpWhenDeployed:        motivatedPokemon.CpWhenDeployed,
