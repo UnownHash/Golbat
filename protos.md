@@ -149,6 +149,19 @@ Aggregate RSVP counts per location. Gated by `ProcessGyms`. Any location
 whose `maybe_count` and `going_count` are both zero has its RSVP data
 cleared on the gym. Non-`SUCCESS` results are ignored.
 
+### `TitanPlayerSubmissionAction_TITAN_PLAYER_SUBMISSION_ACTION_GET_POIS_IN_RADIUS` *(= 620601)*
+
+Wayfarer POIs of the geodata service: the points of interest around a
+location, including the ones that are not in the game (`is_in_game`). Not part
+of `Method`: it arrives under its own id. The response carries a
+`TitanGeodataServiceGameClientPoiProto` list (up to 50 per request), stored in
+the `wayfarer_poi` table (`id`, `lat`, `lon`, `name`, `description`, `url`,
+`in_game`, `first_seen_timestamp`, `updated`), served by the
+`/api/wayfarer-poi` endpoints and announced through the `wayfarer_poi`
+webhook. The game client does not send this request on its own: the scanner has
+to issue it. POIs without an id or a location are skipped, and a POI that is no
+longer returned is not removed. Non-`SUCCESS` results are ignored.
+
 ## Social actions
 
 The master `ClientAction_CLIENT_ACTION_PROXY_SOCIAL_ACTION` proto is decoded

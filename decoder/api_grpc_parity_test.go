@@ -85,6 +85,9 @@ func TestGrpcApiFieldParity(t *testing.T) {
 		{"TappableScanRequest", reflect.TypeOf(ApiTappableScan{}), &pb.TappableScanRequest{}, nil},
 		{"TappableScanResponse", reflect.TypeOf(ApiTappableScanResult{}), &pb.TappableScanResponse{}, nil},
 		{"TappableDnfFilter", reflect.TypeOf(ApiTappableDnfFilter{}), &pb.TappableDnfFilter{}, nil},
+		{"WayfarerPoi", reflect.TypeOf(ApiWayfarerPoiResult{}), &pb.WayfarerPoi{}, nil},
+		{"WayfarerPoiScanRequest", reflect.TypeOf(ApiWayfarerPoiScan{}), &pb.WayfarerPoiScanRequest{}, nil},
+		{"WayfarerPoiScanResponse", reflect.TypeOf(ApiWayfarerPoiScanResult{}), &pb.WayfarerPoiScanResponse{}, nil},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

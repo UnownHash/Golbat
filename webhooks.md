@@ -27,6 +27,7 @@ document and the code disagree, the code wins — please update this document.
   - [fort_update](#fort_update)
   - [max_battle](#max_battle)
   - [tappable](#tappable)
+  - [wayfarer_poi](#wayfarer_poi)
   - [raid_lobby](#raid_lobby)
   - [max_battle_lobby](#max_battle_lobby)
 - [Configuration](#configuration)
@@ -102,7 +103,7 @@ Every message, regardless of type, is wrapped in this envelope:
 
 | Field     | Type   | Description |
 |-----------|--------|-------------|
-| `type`    | string | One of: `pokemon`, `gym_details`, `raid`, `quest`, `pokestop`, `invasion`, `weather`, `fort_update`, `max_battle`, `tappable`, `raid_lobby`, `max_battle_lobby`. |
+| `type`    | string | One of: `pokemon`, `gym_details`, `raid`, `quest`, `pokestop`, `invasion`, `weather`, `fort_update`, `max_battle`, `tappable`, `wayfarer_poi`, `raid_lobby`, `max_battle_lobby`. |
 | `message` | object | Type-specific payload; see the sections below. |
 
 Area names are **not** included in the envelope — they are applied server-side
@@ -1271,6 +1272,60 @@ tappables whose `disappear_time` moves with every tap.
 
 ---
 
+### wayfarer_poi
+
+Sent when a Wayfarer POI (a point of interest of the Niantic geodata service,
+in the game or not) is first seen, or when its details change. POIs come from
+`GET_POIS_IN_RADIUS` responses (see `protos.md`).
+
+**Source**: `decoder/wayfarer_poi_webhook.go`, `wayfarerPoiWebhookOnSave` (from `saveWayfarerPoiRecord`).
+
+#### Firing conditions
+
+- **`new`**: the POI was not known before.
+- **`edit`**: at least one of the following changed, listed in `edit_types`:
+  - `"name"`
+  - `"description"`
+  - `"image_url"` (compared by URL path, as in [fort_update](#fort_update))
+  - `"location"`
+  - `"in_game"` (the POI entered or left the game)
+
+Seeing a POI again unchanged sends nothing. There is no removal: a POI that is
+no longer returned is not known to be gone.
+
+#### Payload
+
+| JSON field    | Go type               | Description |
+|---------------|-----------------------|-------------|
+| `change_type` | string                | `"new"` or `"edit"`. |
+| `edit_types`  | []string              | What changed; only on `edit`. |
+| `old`         | `*WayfarerPoiWebhook` | State before the change; only on `edit`. |
+| `new`         | `*WayfarerPoiWebhook` | Current state. |
+
+`WayfarerPoiWebhook`:
+
+| JSON field    | Go type   | Description |
+|---------------|-----------|-------------|
+| `id`          | string    | POI ID; the fort ID when the POI is in the game. |
+| `name`        | `*string` | Title; `null` if not given. |
+| `description` | `*string` | Description; `null` if not given. |
+| `image_url`   | `*string` | Image URL; `null` if not given. |
+| `location`    | object    | `{"lat": float64, "lon": float64}`. |
+| `in_game`     | bool      | Whether the POI exists in Pokémon GO. |
+
+##### Example
+
+```json
+{
+  "change_type": "edit",
+  "edit_types": ["in_game"],
+  "old": {"id": "0123456789abcdef0123456789abcdef.16", "name": "Fountain", "description": null, "image_url": "https://lh3.googleusercontent.com/...", "location": {"lat": 40.7128, "lon": -74.006}, "in_game": false},
+  "new": {"id": "0123456789abcdef0123456789abcdef.16", "name": "Fountain", "description": null, "image_url": "https://lh3.googleusercontent.com/...", "location": {"lat": 40.7128, "lon": -74.006}, "in_game": true}
+}
+```
+
+---
+
 ### raid_lobby
 
 Sent for each raid-lobby player count Golbat receives for a known gym.
@@ -1366,6 +1421,7 @@ headers = ["Authorization:Bearer secret", "X-Custom-Header:value"]
 | `pokemon`         | `pokemon`              | Both IV and no-IV variants. |
 | `max_battle`      | `max_battle`           | Station Max Battle state. |
 | `tappable`        | `tappable`             | Reward tappables (candy, items, stardust, …). |
+| `wayfarer_poi`    | `wayfarer_poi`         | Wayfarer POIs first seen or edited. |
 | `raid_lobby`      | `raid_lobby`           | Raid-lobby player counts. |
 | `max_battle_lobby`| `max_battle_lobby`     | Max Battle lobby player counts. |
 

@@ -203,6 +203,23 @@ func TestGrpcApiFortScansRequireFortInMemory(t *testing.T) {
 	}
 }
 
+func TestGrpcApiWayfarerPois(t *testing.T) {
+	withTestConfig(t, "", false)
+	client := pb.NewGolbatApiClient(startGrpcTestServer(t, nil))
+	ctx := context.Background()
+
+	// Both checks answer before the database is consulted.
+	if _, err := client.ScanWayfarerPois(ctx, &pb.WayfarerPoiScanRequest{}); status.Code(err) != codes.InvalidArgument {
+		t.Errorf("ScanWayfarerPois without a bounding box: %v, want InvalidArgument", err)
+	}
+	prevMax := config.Config.Tuning.MaxFortResults
+	config.Config.Tuning.MaxFortResults = 2
+	t.Cleanup(func() { config.Config.Tuning.MaxFortResults = prevMax })
+	if _, err := client.GetWayfarerPoi(ctx, &pb.GetWayfarerPoiRequest{Ids: []string{"a", "b", "c"}}); status.Code(err) != codes.InvalidArgument {
+		t.Errorf("GetWayfarerPoi over cap: %v, want InvalidArgument", err)
+	}
+}
+
 func TestGrpcApiTappables(t *testing.T) {
 	withTestConfig(t, "", false)
 	client := pb.NewGolbatApiClient(startGrpcTestServer(t, nil))

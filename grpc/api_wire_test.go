@@ -13,7 +13,7 @@ func TestGolbatApiServiceShape(t *testing.T) {
 	if svc == nil {
 		t.Fatal("GolbatApi service missing from grpc/api.proto")
 	}
-	want := []string{"ScanPokemon", "GetPokemon", "ScanGyms", "ScanPokestops", "ScanStations", "ScanForts", "ScanTappables", "GetTappable"}
+	want := []string{"ScanPokemon", "GetPokemon", "ScanGyms", "ScanPokestops", "ScanStations", "ScanForts", "ScanTappables", "GetTappable", "ScanWayfarerPois", "GetWayfarerPoi"}
 	if got := svc.Methods().Len(); got != len(want) {
 		t.Fatalf("GolbatApi has %d methods, want %d", got, len(want))
 	}

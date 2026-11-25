@@ -391,6 +391,16 @@ type tappableScanInput struct{ Body decoder.ApiTappableScan }
 type tappableScanOutput struct{ Body decoder.ApiTappableScanResult }
 type tappableAvailableOutput struct{ Body *decoder.ApiTappableAvailable }
 
+type wayfarerPoiByIdInput struct {
+	PoiId string `path:"poi_id" doc:"ID of the Wayfarer POI"`
+}
+type wayfarerPoiByIdOutput struct{ Body decoder.ApiWayfarerPoiResult }
+
+type wayfarerPoiScanInput struct{ Body decoder.ApiWayfarerPoiScan }
+type wayfarerPoiScanOutput struct {
+	Body decoder.ApiWayfarerPoiScanResult
+}
+
 type pokestopPositionsInput struct {
 	// Body is the geofence: a GeoJSON polygon geometry, a GeoJSON feature with
 	// one, or a Golbat fence object. Captured as raw JSON and parsed by
@@ -747,6 +757,49 @@ func registerTier3Routes(api huma.API) {
 	draftBadge(&tappableAvailableOp)
 	huma.Register(api, tappableAvailableOp, func(ctx context.Context, _ *struct{}) (*tappableAvailableOutput, error) {
 		return &tappableAvailableOutput{Body: decoder.GetAvailableTappables(time.Now().Unix())}, nil
+	})
+
+	// GET /api/wayfarer-poi/id/{poi_id}
+	wayfarerPoiByIdOp := huma.Operation{
+		OperationID:   "get-wayfarer-poi",
+		Method:        http.MethodGet,
+		Path:          "/api/wayfarer-poi/id/{poi_id}",
+		Summary:       "Get a single Wayfarer POI by id",
+		Description:   "Returns the Wayfarer POI with the given id from the database, or 404 if it has never been seen.",
+		Tags:          []string{"Wayfarer POI"},
+		Security:      []map[string][]string{{securitySchemeName: {}}},
+		DefaultStatus: http.StatusOK,
+	}
+	draftBadge(&wayfarerPoiByIdOp)
+	huma.Register(api, wayfarerPoiByIdOp, func(ctx context.Context, in *wayfarerPoiByIdInput) (*wayfarerPoiByIdOutput, error) {
+		pois, err := decoder.GetWayfarerPois(ctx, dbDetails, []string{in.PoiId})
+		if err != nil {
+			return nil, huma.Error500InternalServerError("error retrieving wayfarer poi")
+		}
+		if len(pois) == 0 {
+			return nil, huma.Error404NotFound("wayfarer poi not found")
+		}
+		return &wayfarerPoiByIdOutput{Body: *pois[0]}, nil
+	})
+
+	// POST /api/wayfarer-poi/scan
+	wayfarerPoiScanOp := huma.Operation{
+		OperationID:   "scan-wayfarer-pois",
+		Method:        http.MethodPost,
+		Path:          "/api/wayfarer-poi/scan",
+		Summary:       "Search Wayfarer POIs in a bounding box",
+		Description:   "Returns the Wayfarer POIs within [min,max], ordered by id, read from the database (they are not held in a spatial index). Optionally only those that are, or are not, in the game (in_game). Up to limit results (0 = server default; clamped by tuning.max_fort_results). Supports updated_after, applied before the limit. Not gated on fort_in_memory.",
+		Tags:          []string{"Wayfarer POI"},
+		Security:      []map[string][]string{{securitySchemeName: {}}},
+		DefaultStatus: http.StatusOK,
+	}
+	draftBadge(&wayfarerPoiScanOp)
+	huma.Register(api, wayfarerPoiScanOp, func(ctx context.Context, in *wayfarerPoiScanInput) (*wayfarerPoiScanOutput, error) {
+		res, err := decoder.WayfarerPoiScanEndpoint(ctx, dbDetails, in.Body)
+		if err != nil {
+			return nil, huma.Error500InternalServerError("error scanning wayfarer pois")
+		}
+		return &wayfarerPoiScanOutput{Body: *res}, nil
 	})
 
 	// POST /api/pokestop-positions

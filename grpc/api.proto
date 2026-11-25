@@ -26,6 +26,10 @@ service GolbatApi {
   rpc ScanTappables (TappableScanRequest) returns (TappableScanResponse) {}
   // GET /api/tappable/id/{tappable_id}, batched. Misses are omitted; match by id.
   rpc GetTappable (GetTappableRequest) returns (GetTappableResponse) {}
+  // POST /api/wayfarer-poi/scan
+  rpc ScanWayfarerPois (WayfarerPoiScanRequest) returns (WayfarerPoiScanResponse) {}
+  // GET /api/wayfarer-poi/id/{poi_id}, batched. Misses are omitted; match by id.
+  rpc GetWayfarerPoi (GetWayfarerPoiRequest) returns (GetWayfarerPoiResponse) {}
 }
 
 // ---- shared request pieces ----
@@ -507,4 +511,41 @@ message Tappable {
   optional int64 expire_timestamp = 13;
   bool expire_timestamp_verified = 14;
   int64 updated = 15;
+}
+
+// ---- wayfarer pois ----
+
+// Mirrors decoder.ApiWayfarerPoiScan.
+message WayfarerPoiScanRequest {
+  LatLon min = 1;
+  LatLon max = 2;
+  int32 limit = 3;                       // 0 = server default (tuning.max_fort_results)
+  optional int64 updated_after = 4;      // applied before the limit
+  optional bool in_game = 5;             // unset = both
+}
+
+message WayfarerPoiScanResponse {
+  repeated WayfarerPoi wayfarer_pois = 1;
+  bool limit_reached = 2;
+}
+
+message GetWayfarerPoiRequest {
+  repeated string ids = 1;
+}
+
+message GetWayfarerPoiResponse {
+  repeated WayfarerPoi wayfarer_pois = 1;
+}
+
+// Mirrors decoder.ApiWayfarerPoiResult.
+message WayfarerPoi {
+  string id = 1;
+  double lat = 2;
+  double lon = 3;
+  optional string name = 4;
+  optional string description = 5;
+  optional string url = 6;
+  bool in_game = 7;
+  int64 first_seen_timestamp = 8;
+  int64 updated = 9;
 }

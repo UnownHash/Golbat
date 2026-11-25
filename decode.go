@@ -36,6 +36,13 @@ func decode(ctx context.Context, method int, protoData *ProtoData) {
 			}
 			return val
 		}
+		// Titan player-submission actions travel as their own method ids, outside Method
+		if val, ok := pogo.TitanPlayerSubmissionAction_name[int32(method)]; ok {
+			if trimString {
+				return strings.TrimPrefix(val, "TITAN_PLAYER_SUBMISSION_ACTION_")
+			}
+			return val
+		}
 		return fmt.Sprintf("#%d", method)
 	}
 
@@ -131,6 +138,9 @@ func decode(ctx context.Context, method int, protoData *ProtoData) {
 		if getScanParameters(protoData).ProcessGyms {
 			result = decodeGetEventRsvpCount(ctx, protoData.Data)
 		}
+		processed = true
+	case pogo.Method(pogo.TitanPlayerSubmissionAction_TITAN_PLAYER_SUBMISSION_ACTION_GET_POIS_IN_RADIUS):
+		result = decodeGetPoisInRadius(ctx, protoData.Data)
 		processed = true
 	default:
 		log.Debugf("Did not know hook type %s", pogo.Method(method))
@@ -845,6 +855,20 @@ func decodeGetEventRsvp(ctx context.Context, request []byte, data []byte) string
 	}
 
 	return "Failed to parse GetEventRsvpsProto - unknown event type"
+}
+
+func decodeGetPoisInRadius(ctx context.Context, data []byte) string {
+	var pois pogo.TitanGetPoisInRadiusOutProto
+	if err := unmarshalClientProto(data, &pois); err != nil {
+		log.Errorf("Failed to parse %s", err)
+		return fmt.Sprintf("Failed to parse TitanGetPoisInRadiusOutProto %s", err)
+	}
+
+	if pois.Status != pogo.TitanGetPoisInRadiusOutProto_SUCCESS {
+		return fmt.Sprintf("Ignored TitanGetPoisInRadiusOutProto non-success status %s", pois.Status)
+	}
+
+	return decoder.UpdateWayfarerPoisWithGeodataProto(ctx, dbDetails, pois.GetPois())
 }
 
 func decodeGetEventRsvpCount(ctx context.Context, data []byte) string {

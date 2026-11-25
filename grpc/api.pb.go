@@ -3881,6 +3881,332 @@ func (x *Tappable) GetUpdated() int64 {
 	return 0
 }
 
+// Mirrors decoder.ApiWayfarerPoiScan.
+type WayfarerPoiScanRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Min           *LatLon                `protobuf:"bytes,1,opt,name=min,proto3" json:"min,omitempty"`
+	Max           *LatLon                `protobuf:"bytes,2,opt,name=max,proto3" json:"max,omitempty"`
+	Limit         int32                  `protobuf:"varint,3,opt,name=limit,proto3" json:"limit,omitempty"`                                         // 0 = server default (tuning.max_fort_results)
+	UpdatedAfter  *int64                 `protobuf:"varint,4,opt,name=updated_after,json=updatedAfter,proto3,oneof" json:"updated_after,omitempty"` // applied before the limit
+	InGame        *bool                  `protobuf:"varint,5,opt,name=in_game,json=inGame,proto3,oneof" json:"in_game,omitempty"`                   // unset = both
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *WayfarerPoiScanRequest) Reset() {
+	*x = WayfarerPoiScanRequest{}
+	mi := &file_grpc_api_proto_msgTypes[32]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WayfarerPoiScanRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WayfarerPoiScanRequest) ProtoMessage() {}
+
+func (x *WayfarerPoiScanRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_grpc_api_proto_msgTypes[32]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WayfarerPoiScanRequest.ProtoReflect.Descriptor instead.
+func (*WayfarerPoiScanRequest) Descriptor() ([]byte, []int) {
+	return file_grpc_api_proto_rawDescGZIP(), []int{32}
+}
+
+func (x *WayfarerPoiScanRequest) GetMin() *LatLon {
+	if x != nil {
+		return x.Min
+	}
+	return nil
+}
+
+func (x *WayfarerPoiScanRequest) GetMax() *LatLon {
+	if x != nil {
+		return x.Max
+	}
+	return nil
+}
+
+func (x *WayfarerPoiScanRequest) GetLimit() int32 {
+	if x != nil {
+		return x.Limit
+	}
+	return 0
+}
+
+func (x *WayfarerPoiScanRequest) GetUpdatedAfter() int64 {
+	if x != nil && x.UpdatedAfter != nil {
+		return *x.UpdatedAfter
+	}
+	return 0
+}
+
+func (x *WayfarerPoiScanRequest) GetInGame() bool {
+	if x != nil && x.InGame != nil {
+		return *x.InGame
+	}
+	return false
+}
+
+type WayfarerPoiScanResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	WayfarerPois  []*WayfarerPoi         `protobuf:"bytes,1,rep,name=wayfarer_pois,json=wayfarerPois,proto3" json:"wayfarer_pois,omitempty"`
+	LimitReached  bool                   `protobuf:"varint,2,opt,name=limit_reached,json=limitReached,proto3" json:"limit_reached,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *WayfarerPoiScanResponse) Reset() {
+	*x = WayfarerPoiScanResponse{}
+	mi := &file_grpc_api_proto_msgTypes[33]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WayfarerPoiScanResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WayfarerPoiScanResponse) ProtoMessage() {}
+
+func (x *WayfarerPoiScanResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_grpc_api_proto_msgTypes[33]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WayfarerPoiScanResponse.ProtoReflect.Descriptor instead.
+func (*WayfarerPoiScanResponse) Descriptor() ([]byte, []int) {
+	return file_grpc_api_proto_rawDescGZIP(), []int{33}
+}
+
+func (x *WayfarerPoiScanResponse) GetWayfarerPois() []*WayfarerPoi {
+	if x != nil {
+		return x.WayfarerPois
+	}
+	return nil
+}
+
+func (x *WayfarerPoiScanResponse) GetLimitReached() bool {
+	if x != nil {
+		return x.LimitReached
+	}
+	return false
+}
+
+type GetWayfarerPoiRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Ids           []string               `protobuf:"bytes,1,rep,name=ids,proto3" json:"ids,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetWayfarerPoiRequest) Reset() {
+	*x = GetWayfarerPoiRequest{}
+	mi := &file_grpc_api_proto_msgTypes[34]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetWayfarerPoiRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetWayfarerPoiRequest) ProtoMessage() {}
+
+func (x *GetWayfarerPoiRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_grpc_api_proto_msgTypes[34]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetWayfarerPoiRequest.ProtoReflect.Descriptor instead.
+func (*GetWayfarerPoiRequest) Descriptor() ([]byte, []int) {
+	return file_grpc_api_proto_rawDescGZIP(), []int{34}
+}
+
+func (x *GetWayfarerPoiRequest) GetIds() []string {
+	if x != nil {
+		return x.Ids
+	}
+	return nil
+}
+
+type GetWayfarerPoiResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	WayfarerPois  []*WayfarerPoi         `protobuf:"bytes,1,rep,name=wayfarer_pois,json=wayfarerPois,proto3" json:"wayfarer_pois,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetWayfarerPoiResponse) Reset() {
+	*x = GetWayfarerPoiResponse{}
+	mi := &file_grpc_api_proto_msgTypes[35]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetWayfarerPoiResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetWayfarerPoiResponse) ProtoMessage() {}
+
+func (x *GetWayfarerPoiResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_grpc_api_proto_msgTypes[35]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetWayfarerPoiResponse.ProtoReflect.Descriptor instead.
+func (*GetWayfarerPoiResponse) Descriptor() ([]byte, []int) {
+	return file_grpc_api_proto_rawDescGZIP(), []int{35}
+}
+
+func (x *GetWayfarerPoiResponse) GetWayfarerPois() []*WayfarerPoi {
+	if x != nil {
+		return x.WayfarerPois
+	}
+	return nil
+}
+
+// Mirrors decoder.ApiWayfarerPoiResult.
+type WayfarerPoi struct {
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	Id                 string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Lat                float64                `protobuf:"fixed64,2,opt,name=lat,proto3" json:"lat,omitempty"`
+	Lon                float64                `protobuf:"fixed64,3,opt,name=lon,proto3" json:"lon,omitempty"`
+	Name               *string                `protobuf:"bytes,4,opt,name=name,proto3,oneof" json:"name,omitempty"`
+	Description        *string                `protobuf:"bytes,5,opt,name=description,proto3,oneof" json:"description,omitempty"`
+	Url                *string                `protobuf:"bytes,6,opt,name=url,proto3,oneof" json:"url,omitempty"`
+	InGame             bool                   `protobuf:"varint,7,opt,name=in_game,json=inGame,proto3" json:"in_game,omitempty"`
+	FirstSeenTimestamp int64                  `protobuf:"varint,8,opt,name=first_seen_timestamp,json=firstSeenTimestamp,proto3" json:"first_seen_timestamp,omitempty"`
+	Updated            int64                  `protobuf:"varint,9,opt,name=updated,proto3" json:"updated,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *WayfarerPoi) Reset() {
+	*x = WayfarerPoi{}
+	mi := &file_grpc_api_proto_msgTypes[36]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WayfarerPoi) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WayfarerPoi) ProtoMessage() {}
+
+func (x *WayfarerPoi) ProtoReflect() protoreflect.Message {
+	mi := &file_grpc_api_proto_msgTypes[36]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WayfarerPoi.ProtoReflect.Descriptor instead.
+func (*WayfarerPoi) Descriptor() ([]byte, []int) {
+	return file_grpc_api_proto_rawDescGZIP(), []int{36}
+}
+
+func (x *WayfarerPoi) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *WayfarerPoi) GetLat() float64 {
+	if x != nil {
+		return x.Lat
+	}
+	return 0
+}
+
+func (x *WayfarerPoi) GetLon() float64 {
+	if x != nil {
+		return x.Lon
+	}
+	return 0
+}
+
+func (x *WayfarerPoi) GetName() string {
+	if x != nil && x.Name != nil {
+		return *x.Name
+	}
+	return ""
+}
+
+func (x *WayfarerPoi) GetDescription() string {
+	if x != nil && x.Description != nil {
+		return *x.Description
+	}
+	return ""
+}
+
+func (x *WayfarerPoi) GetUrl() string {
+	if x != nil && x.Url != nil {
+		return *x.Url
+	}
+	return ""
+}
+
+func (x *WayfarerPoi) GetInGame() bool {
+	if x != nil {
+		return x.InGame
+	}
+	return false
+}
+
+func (x *WayfarerPoi) GetFirstSeenTimestamp() int64 {
+	if x != nil {
+		return x.FirstSeenTimestamp
+	}
+	return 0
+}
+
+func (x *WayfarerPoi) GetUpdated() int64 {
+	if x != nil {
+		return x.Updated
+	}
+	return 0
+}
+
 var File_grpc_api_proto protoreflect.FileDescriptor
 
 const file_grpc_api_proto_rawDesc = "" +
@@ -4472,7 +4798,36 @@ const file_grpc_api_proto_rawDesc = "" +
 	"\x12_reward_pokemon_idB\b\n" +
 	"\x06_countB\x0f\n" +
 	"\r_rewards_jsonB\x13\n" +
-	"\x11_expire_timestamp2\x90\x05\n" +
+	"\x11_expire_timestamp\"\xe0\x01\n" +
+	"\x16WayfarerPoiScanRequest\x12$\n" +
+	"\x03min\x18\x01 \x01(\v2\x12.golbat_api.LatLonR\x03min\x12$\n" +
+	"\x03max\x18\x02 \x01(\v2\x12.golbat_api.LatLonR\x03max\x12\x14\n" +
+	"\x05limit\x18\x03 \x01(\x05R\x05limit\x12(\n" +
+	"\rupdated_after\x18\x04 \x01(\x03H\x00R\fupdatedAfter\x88\x01\x01\x12\x1c\n" +
+	"\ain_game\x18\x05 \x01(\bH\x01R\x06inGame\x88\x01\x01B\x10\n" +
+	"\x0e_updated_afterB\n" +
+	"\n" +
+	"\b_in_game\"|\n" +
+	"\x17WayfarerPoiScanResponse\x12<\n" +
+	"\rwayfarer_pois\x18\x01 \x03(\v2\x17.golbat_api.WayfarerPoiR\fwayfarerPois\x12#\n" +
+	"\rlimit_reached\x18\x02 \x01(\bR\flimitReached\")\n" +
+	"\x15GetWayfarerPoiRequest\x12\x10\n" +
+	"\x03ids\x18\x01 \x03(\tR\x03ids\"V\n" +
+	"\x16GetWayfarerPoiResponse\x12<\n" +
+	"\rwayfarer_pois\x18\x01 \x03(\v2\x17.golbat_api.WayfarerPoiR\fwayfarerPois\"\x9e\x02\n" +
+	"\vWayfarerPoi\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x10\n" +
+	"\x03lat\x18\x02 \x01(\x01R\x03lat\x12\x10\n" +
+	"\x03lon\x18\x03 \x01(\x01R\x03lon\x12\x17\n" +
+	"\x04name\x18\x04 \x01(\tH\x00R\x04name\x88\x01\x01\x12%\n" +
+	"\vdescription\x18\x05 \x01(\tH\x01R\vdescription\x88\x01\x01\x12\x15\n" +
+	"\x03url\x18\x06 \x01(\tH\x02R\x03url\x88\x01\x01\x12\x17\n" +
+	"\ain_game\x18\a \x01(\bR\x06inGame\x120\n" +
+	"\x14first_seen_timestamp\x18\b \x01(\x03R\x12firstSeenTimestamp\x12\x18\n" +
+	"\aupdated\x18\t \x01(\x03R\aupdatedB\a\n" +
+	"\x05_nameB\x0e\n" +
+	"\f_descriptionB\x06\n" +
+	"\x04_url2\xca\x06\n" +
 	"\tGolbatApi\x12P\n" +
 	"\vScanPokemon\x12\x1e.golbat_api.PokemonScanRequest\x1a\x1f.golbat_api.PokemonScanResponse\"\x00\x12M\n" +
 	"\n" +
@@ -4482,7 +4837,9 @@ const file_grpc_api_proto_rawDesc = "" +
 	"\fScanStations\x12\x1b.golbat_api.FortScanRequest\x1a\x1f.golbat_api.StationScanResponse\"\x00\x12P\n" +
 	"\tScanForts\x12#.golbat_api.FortCombinedScanRequest\x1a\x1c.golbat_api.FortScanResponse\"\x00\x12T\n" +
 	"\rScanTappables\x12\x1f.golbat_api.TappableScanRequest\x1a .golbat_api.TappableScanResponse\"\x00\x12P\n" +
-	"\vGetTappable\x12\x1e.golbat_api.GetTappableRequest\x1a\x1f.golbat_api.GetTappableResponse\"\x00B\"Z github.com/unownhash/golbat/grpcb\x06proto3"
+	"\vGetTappable\x12\x1e.golbat_api.GetTappableRequest\x1a\x1f.golbat_api.GetTappableResponse\"\x00\x12]\n" +
+	"\x10ScanWayfarerPois\x12\".golbat_api.WayfarerPoiScanRequest\x1a#.golbat_api.WayfarerPoiScanResponse\"\x00\x12Y\n" +
+	"\x0eGetWayfarerPoi\x12!.golbat_api.GetWayfarerPoiRequest\x1a\".golbat_api.GetWayfarerPoiResponse\"\x00B\"Z github.com/unownhash/golbat/grpcb\x06proto3"
 
 var (
 	file_grpc_api_proto_rawDescOnce sync.Once
@@ -4496,7 +4853,7 @@ func file_grpc_api_proto_rawDescGZIP() []byte {
 	return file_grpc_api_proto_rawDescData
 }
 
-var file_grpc_api_proto_msgTypes = make([]protoimpl.MessageInfo, 32)
+var file_grpc_api_proto_msgTypes = make([]protoimpl.MessageInfo, 37)
 var file_grpc_api_proto_goTypes = []any{
 	(*LatLon)(nil),                  // 0: golbat_api.LatLon
 	(*IntRange)(nil),                // 1: golbat_api.IntRange
@@ -4530,6 +4887,11 @@ var file_grpc_api_proto_goTypes = []any{
 	(*GetTappableRequest)(nil),      // 29: golbat_api.GetTappableRequest
 	(*GetTappableResponse)(nil),     // 30: golbat_api.GetTappableResponse
 	(*Tappable)(nil),                // 31: golbat_api.Tappable
+	(*WayfarerPoiScanRequest)(nil),  // 32: golbat_api.WayfarerPoiScanRequest
+	(*WayfarerPoiScanResponse)(nil), // 33: golbat_api.WayfarerPoiScanResponse
+	(*GetWayfarerPoiRequest)(nil),   // 34: golbat_api.GetWayfarerPoiRequest
+	(*GetWayfarerPoiResponse)(nil),  // 35: golbat_api.GetWayfarerPoiResponse
+	(*WayfarerPoi)(nil),             // 36: golbat_api.WayfarerPoi
 }
 var file_grpc_api_proto_depIdxs = []int32{
 	2,  // 0: golbat_api.PokemonDnfFilter.pokemon:type_name -> golbat_api.DnfId
@@ -4585,27 +4947,35 @@ var file_grpc_api_proto_depIdxs = []int32{
 	26, // 50: golbat_api.TappableScanRequest.filters:type_name -> golbat_api.TappableDnfFilter
 	31, // 51: golbat_api.TappableScanResponse.tappables:type_name -> golbat_api.Tappable
 	31, // 52: golbat_api.GetTappableResponse.tappables:type_name -> golbat_api.Tappable
-	4,  // 53: golbat_api.GolbatApi.ScanPokemon:input_type -> golbat_api.PokemonScanRequest
-	6,  // 54: golbat_api.GolbatApi.GetPokemon:input_type -> golbat_api.GetPokemonRequest
-	13, // 55: golbat_api.GolbatApi.ScanGyms:input_type -> golbat_api.FortScanRequest
-	13, // 56: golbat_api.GolbatApi.ScanPokestops:input_type -> golbat_api.FortScanRequest
-	13, // 57: golbat_api.GolbatApi.ScanStations:input_type -> golbat_api.FortScanRequest
-	16, // 58: golbat_api.GolbatApi.ScanForts:input_type -> golbat_api.FortCombinedScanRequest
-	27, // 59: golbat_api.GolbatApi.ScanTappables:input_type -> golbat_api.TappableScanRequest
-	29, // 60: golbat_api.GolbatApi.GetTappable:input_type -> golbat_api.GetTappableRequest
-	5,  // 61: golbat_api.GolbatApi.ScanPokemon:output_type -> golbat_api.PokemonScanResponse
-	7,  // 62: golbat_api.GolbatApi.GetPokemon:output_type -> golbat_api.GetPokemonResponse
-	22, // 63: golbat_api.GolbatApi.ScanGyms:output_type -> golbat_api.GymScanResponse
-	23, // 64: golbat_api.GolbatApi.ScanPokestops:output_type -> golbat_api.PokestopScanResponse
-	24, // 65: golbat_api.GolbatApi.ScanStations:output_type -> golbat_api.StationScanResponse
-	25, // 66: golbat_api.GolbatApi.ScanForts:output_type -> golbat_api.FortScanResponse
-	28, // 67: golbat_api.GolbatApi.ScanTappables:output_type -> golbat_api.TappableScanResponse
-	30, // 68: golbat_api.GolbatApi.GetTappable:output_type -> golbat_api.GetTappableResponse
-	61, // [61:69] is the sub-list for method output_type
-	53, // [53:61] is the sub-list for method input_type
-	53, // [53:53] is the sub-list for extension type_name
-	53, // [53:53] is the sub-list for extension extendee
-	0,  // [0:53] is the sub-list for field type_name
+	0,  // 53: golbat_api.WayfarerPoiScanRequest.min:type_name -> golbat_api.LatLon
+	0,  // 54: golbat_api.WayfarerPoiScanRequest.max:type_name -> golbat_api.LatLon
+	36, // 55: golbat_api.WayfarerPoiScanResponse.wayfarer_pois:type_name -> golbat_api.WayfarerPoi
+	36, // 56: golbat_api.GetWayfarerPoiResponse.wayfarer_pois:type_name -> golbat_api.WayfarerPoi
+	4,  // 57: golbat_api.GolbatApi.ScanPokemon:input_type -> golbat_api.PokemonScanRequest
+	6,  // 58: golbat_api.GolbatApi.GetPokemon:input_type -> golbat_api.GetPokemonRequest
+	13, // 59: golbat_api.GolbatApi.ScanGyms:input_type -> golbat_api.FortScanRequest
+	13, // 60: golbat_api.GolbatApi.ScanPokestops:input_type -> golbat_api.FortScanRequest
+	13, // 61: golbat_api.GolbatApi.ScanStations:input_type -> golbat_api.FortScanRequest
+	16, // 62: golbat_api.GolbatApi.ScanForts:input_type -> golbat_api.FortCombinedScanRequest
+	27, // 63: golbat_api.GolbatApi.ScanTappables:input_type -> golbat_api.TappableScanRequest
+	29, // 64: golbat_api.GolbatApi.GetTappable:input_type -> golbat_api.GetTappableRequest
+	32, // 65: golbat_api.GolbatApi.ScanWayfarerPois:input_type -> golbat_api.WayfarerPoiScanRequest
+	34, // 66: golbat_api.GolbatApi.GetWayfarerPoi:input_type -> golbat_api.GetWayfarerPoiRequest
+	5,  // 67: golbat_api.GolbatApi.ScanPokemon:output_type -> golbat_api.PokemonScanResponse
+	7,  // 68: golbat_api.GolbatApi.GetPokemon:output_type -> golbat_api.GetPokemonResponse
+	22, // 69: golbat_api.GolbatApi.ScanGyms:output_type -> golbat_api.GymScanResponse
+	23, // 70: golbat_api.GolbatApi.ScanPokestops:output_type -> golbat_api.PokestopScanResponse
+	24, // 71: golbat_api.GolbatApi.ScanStations:output_type -> golbat_api.StationScanResponse
+	25, // 72: golbat_api.GolbatApi.ScanForts:output_type -> golbat_api.FortScanResponse
+	28, // 73: golbat_api.GolbatApi.ScanTappables:output_type -> golbat_api.TappableScanResponse
+	30, // 74: golbat_api.GolbatApi.GetTappable:output_type -> golbat_api.GetTappableResponse
+	33, // 75: golbat_api.GolbatApi.ScanWayfarerPois:output_type -> golbat_api.WayfarerPoiScanResponse
+	35, // 76: golbat_api.GolbatApi.GetWayfarerPoi:output_type -> golbat_api.GetWayfarerPoiResponse
+	67, // [67:77] is the sub-list for method output_type
+	57, // [57:67] is the sub-list for method input_type
+	57, // [57:57] is the sub-list for extension type_name
+	57, // [57:57] is the sub-list for extension extendee
+	0,  // [0:57] is the sub-list for field type_name
 }
 
 func init() { file_grpc_api_proto_init() }
@@ -4628,13 +4998,15 @@ func file_grpc_api_proto_init() {
 	file_grpc_api_proto_msgTypes[21].OneofWrappers = []any{}
 	file_grpc_api_proto_msgTypes[27].OneofWrappers = []any{}
 	file_grpc_api_proto_msgTypes[31].OneofWrappers = []any{}
+	file_grpc_api_proto_msgTypes[32].OneofWrappers = []any{}
+	file_grpc_api_proto_msgTypes[36].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_grpc_api_proto_rawDesc), len(file_grpc_api_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   32,
+			NumMessages:   37,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

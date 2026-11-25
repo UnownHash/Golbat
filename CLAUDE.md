@@ -31,7 +31,7 @@ decode.go            — Proto method dispatcher, GMO decoder
 decode_nebula.go     — Nebula-context message dispatch (decodeNebula)
 decode_push_gateway.go — Push-gateway message dispatch (decodePushGateway)
 grpc_server_raw.go   — gRPC raw proto receiver (SubmitRawProto)
-grpc_server_api.go   — GolbatApi gRPC service (pokemon, fort, tappable) and newGrpcServer()
+grpc_server_api.go   — GolbatApi gRPC service (pokemon, fort, tappable, wayfarer poi) and newGrpcServer()
 grpc_auth.go         — api_secret unary/stream interceptors for GolbatApi methods
 grpc_stats.go        — Per-RPC debug timing log (grpc stats.Handler)
 deviceList.go        — Device location cache for /api/devices
@@ -122,7 +122,7 @@ overload instead of unbounded goroutine pileup on internal locks.
 
 The same listener also serves `GolbatApi` (`grpc/api.proto`): `ScanPokemon`,
 `GetPokemon`, `ScanGyms`, `ScanPokestops`, `ScanStations`, `ScanForts`,
-`ScanTappables`, `GetTappable`. Each
+`ScanTappables`, `GetTappable`, `ScanWayfarerPois`, `GetWayfarerPoi`. Each
 request converts to the HTTP request struct (`decoder/api_grpc_*.go`) and runs
 the same scan code as the Huma endpoint; results mirror the `Api*Result`
 structs field for field (`decoder/api_grpc_parity_test.go` fails if either
@@ -199,6 +199,7 @@ Every entity cache is an `OtterCache` (see Caching). "Touch" is the per-cache to
 | Incident | string (incident ID) | 60 min | yes | string | string |
 | Weather | int64 (S2 cell ID) | 60 min | yes | — | int64 |
 | Route | string (route ID) | 60 min | yes | string | string |
+| WayfarerPoi | string (POI ID) | 60 min | yes | string | string |
 | Tappable | uint64 (encounter ID) | per-entry (expiry) | no | uint64 | uint64 |
 
 ## Caching
@@ -346,6 +347,7 @@ Worker queue depths are exported every 10s as
 | `raid_lobby` | RaidLobby | `raid_lobby` |
 | `max_battle_lobby` | MaxBattleLobby | `max_battle_lobby` |
 | `tappable` | Tappable | `tappable` |
+| `wayfarer_poi` | WayfarerPoi | `wayfarer_poi` |
 
 `tappable` covers reward tappables only, sent when a reward type is first recorded (`rewardChanged`, set in `setRewards`); encounter tappables go out as `pokemon` webhooks. Payload follows the `pokemon` hook's field names (`webhooks.md`).
 
