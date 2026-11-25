@@ -19,14 +19,16 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	GolbatApi_ScanPokemon_FullMethodName   = "/golbat_api.GolbatApi/ScanPokemon"
-	GolbatApi_GetPokemon_FullMethodName    = "/golbat_api.GolbatApi/GetPokemon"
-	GolbatApi_ScanGyms_FullMethodName      = "/golbat_api.GolbatApi/ScanGyms"
-	GolbatApi_ScanPokestops_FullMethodName = "/golbat_api.GolbatApi/ScanPokestops"
-	GolbatApi_ScanStations_FullMethodName  = "/golbat_api.GolbatApi/ScanStations"
-	GolbatApi_ScanForts_FullMethodName     = "/golbat_api.GolbatApi/ScanForts"
-	GolbatApi_ScanTappables_FullMethodName = "/golbat_api.GolbatApi/ScanTappables"
-	GolbatApi_GetTappable_FullMethodName   = "/golbat_api.GolbatApi/GetTappable"
+	GolbatApi_ScanPokemon_FullMethodName      = "/golbat_api.GolbatApi/ScanPokemon"
+	GolbatApi_GetPokemon_FullMethodName       = "/golbat_api.GolbatApi/GetPokemon"
+	GolbatApi_ScanGyms_FullMethodName         = "/golbat_api.GolbatApi/ScanGyms"
+	GolbatApi_ScanPokestops_FullMethodName    = "/golbat_api.GolbatApi/ScanPokestops"
+	GolbatApi_ScanStations_FullMethodName     = "/golbat_api.GolbatApi/ScanStations"
+	GolbatApi_ScanForts_FullMethodName        = "/golbat_api.GolbatApi/ScanForts"
+	GolbatApi_ScanTappables_FullMethodName    = "/golbat_api.GolbatApi/ScanTappables"
+	GolbatApi_GetTappable_FullMethodName      = "/golbat_api.GolbatApi/GetTappable"
+	GolbatApi_ScanWayfarerPois_FullMethodName = "/golbat_api.GolbatApi/ScanWayfarerPois"
+	GolbatApi_GetWayfarerPoi_FullMethodName   = "/golbat_api.GolbatApi/GetWayfarerPoi"
 )
 
 // GolbatApiClient is the client API for GolbatApi service.
@@ -55,6 +57,10 @@ type GolbatApiClient interface {
 	ScanTappables(ctx context.Context, in *TappableScanRequest, opts ...grpc.CallOption) (*TappableScanResponse, error)
 	// GET /api/tappable/id/{tappable_id}, batched. Misses are omitted; match by id.
 	GetTappable(ctx context.Context, in *GetTappableRequest, opts ...grpc.CallOption) (*GetTappableResponse, error)
+	// POST /api/wayfarer-poi/scan
+	ScanWayfarerPois(ctx context.Context, in *WayfarerPoiScanRequest, opts ...grpc.CallOption) (*WayfarerPoiScanResponse, error)
+	// GET /api/wayfarer-poi/id/{poi_id}, batched. Misses are omitted; match by id.
+	GetWayfarerPoi(ctx context.Context, in *GetWayfarerPoiRequest, opts ...grpc.CallOption) (*GetWayfarerPoiResponse, error)
 }
 
 type golbatApiClient struct {
@@ -145,6 +151,26 @@ func (c *golbatApiClient) GetTappable(ctx context.Context, in *GetTappableReques
 	return out, nil
 }
 
+func (c *golbatApiClient) ScanWayfarerPois(ctx context.Context, in *WayfarerPoiScanRequest, opts ...grpc.CallOption) (*WayfarerPoiScanResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(WayfarerPoiScanResponse)
+	err := c.cc.Invoke(ctx, GolbatApi_ScanWayfarerPois_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *golbatApiClient) GetWayfarerPoi(ctx context.Context, in *GetWayfarerPoiRequest, opts ...grpc.CallOption) (*GetWayfarerPoiResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetWayfarerPoiResponse)
+	err := c.cc.Invoke(ctx, GolbatApi_GetWayfarerPoi_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // GolbatApiServer is the server API for GolbatApi service.
 // All implementations must embed UnimplementedGolbatApiServer
 // for forward compatibility.
@@ -171,6 +197,10 @@ type GolbatApiServer interface {
 	ScanTappables(context.Context, *TappableScanRequest) (*TappableScanResponse, error)
 	// GET /api/tappable/id/{tappable_id}, batched. Misses are omitted; match by id.
 	GetTappable(context.Context, *GetTappableRequest) (*GetTappableResponse, error)
+	// POST /api/wayfarer-poi/scan
+	ScanWayfarerPois(context.Context, *WayfarerPoiScanRequest) (*WayfarerPoiScanResponse, error)
+	// GET /api/wayfarer-poi/id/{poi_id}, batched. Misses are omitted; match by id.
+	GetWayfarerPoi(context.Context, *GetWayfarerPoiRequest) (*GetWayfarerPoiResponse, error)
 	mustEmbedUnimplementedGolbatApiServer()
 }
 
@@ -204,6 +234,12 @@ func (UnimplementedGolbatApiServer) ScanTappables(context.Context, *TappableScan
 }
 func (UnimplementedGolbatApiServer) GetTappable(context.Context, *GetTappableRequest) (*GetTappableResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetTappable not implemented")
+}
+func (UnimplementedGolbatApiServer) ScanWayfarerPois(context.Context, *WayfarerPoiScanRequest) (*WayfarerPoiScanResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ScanWayfarerPois not implemented")
+}
+func (UnimplementedGolbatApiServer) GetWayfarerPoi(context.Context, *GetWayfarerPoiRequest) (*GetWayfarerPoiResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetWayfarerPoi not implemented")
 }
 func (UnimplementedGolbatApiServer) mustEmbedUnimplementedGolbatApiServer() {}
 func (UnimplementedGolbatApiServer) testEmbeddedByValue()                   {}
@@ -370,6 +406,42 @@ func _GolbatApi_GetTappable_Handler(srv interface{}, ctx context.Context, dec fu
 	return interceptor(ctx, in, info, handler)
 }
 
+func _GolbatApi_ScanWayfarerPois_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(WayfarerPoiScanRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GolbatApiServer).ScanWayfarerPois(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GolbatApi_ScanWayfarerPois_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GolbatApiServer).ScanWayfarerPois(ctx, req.(*WayfarerPoiScanRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _GolbatApi_GetWayfarerPoi_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetWayfarerPoiRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GolbatApiServer).GetWayfarerPoi(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GolbatApi_GetWayfarerPoi_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GolbatApiServer).GetWayfarerPoi(ctx, req.(*GetWayfarerPoiRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // GolbatApi_ServiceDesc is the grpc.ServiceDesc for GolbatApi service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -408,6 +480,14 @@ var GolbatApi_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetTappable",
 			Handler:    _GolbatApi_GetTappable_Handler,
+		},
+		{
+			MethodName: "ScanWayfarerPois",
+			Handler:    _GolbatApi_ScanWayfarerPois_Handler,
+		},
+		{
+			MethodName: "GetWayfarerPoi",
+			Handler:    _GolbatApi_GetWayfarerPoi_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

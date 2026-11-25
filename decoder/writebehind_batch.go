@@ -29,6 +29,7 @@ var (
 	pokemonQueue       *writebehind.TypedQueue[uint64, PokemonData]
 	spawnpointQueue    *writebehind.TypedQueue[int64, SpawnpointData]
 	routeQueue         *writebehind.TypedQueue[string, RouteData]
+	wayfarerPoiQueue   *writebehind.TypedQueue[string, WayfarerPoiData]
 	tappableQueue      *writebehind.TypedQueue[uint64, TappableData]
 	stationQueue       *writebehind.TypedQueue[FortId, StationData]
 	stationBattleQueue *writebehind.TypedQueue[FortId, stationBattleWrite]
@@ -132,6 +133,20 @@ func InitTypedQueues(ctx context.Context, dbDetails db.DbDetails, stats stats_co
 		KeyCompare:          cmp.Compare[string],
 	})
 	queueManager.Register(routeQueue)
+
+	wayfarerPoiQueue = writebehind.NewTypedQueue(writebehind.TypedQueueConfig[string, WayfarerPoiData]{
+		Name:                "wayfarer_poi",
+		BatchSize:           batchSize,
+		BatchTimeout:        batchTimeout,
+		StartupDelaySeconds: startupDelay,
+		Limiter:             limiter,
+		Db:                  dbDetails,
+		Stats:               stats,
+		FlushFunc:           flushWayfarerPoiBatch,
+		KeyFunc:             func(d WayfarerPoiData) string { return d.Id },
+		KeyCompare:          cmp.Compare[string],
+	})
+	queueManager.Register(wayfarerPoiQueue)
 
 	tappableQueue = writebehind.NewTypedQueue(writebehind.TypedQueueConfig[uint64, TappableData]{
 		Name:                "tappable",
@@ -256,6 +271,11 @@ func flushSpawnpointBatch(ctx context.Context, dbDetails db.DbDetails, spawnpoin
 
 func flushRouteBatch(ctx context.Context, dbDetails db.DbDetails, routes []RouteData) error {
 	_, err := dbDetails.GeneralDb.NamedExecContext(ctx, routeBatchUpsertQuery, routes)
+	return err
+}
+
+func flushWayfarerPoiBatch(ctx context.Context, dbDetails db.DbDetails, pois []WayfarerPoiData) error {
+	_, err := dbDetails.GeneralDb.NamedExecContext(ctx, wayfarerPoiBatchUpsertQuery, pois)
 	return err
 }
 
@@ -549,6 +569,24 @@ ON DUPLICATE KEY UPDATE
 	updated = VALUES(updated),
 	version = VALUES(version),
 	waypoints = VALUES(waypoints)
+`
+
+// first_seen_timestamp is left out of the update: the row keeps the first one.
+const wayfarerPoiBatchUpsertQuery = `
+INSERT INTO wayfarer_poi (
+	id, lat, lon, name, description, url, in_game, first_seen_timestamp, updated
+)
+VALUES (
+	:id, :lat, :lon, :name, :description, :url, :in_game, :first_seen_timestamp, :updated
+)
+ON DUPLICATE KEY UPDATE
+	lat = VALUES(lat),
+	lon = VALUES(lon),
+	name = VALUES(name),
+	description = VALUES(description),
+	url = VALUES(url),
+	in_game = VALUES(in_game),
+	updated = VALUES(updated)
 `
 
 const tappableBatchUpsertQuery = `

@@ -112,7 +112,7 @@ level_caps = [50, 51]           # Level caps used in PVP rankings
 [[webhooks]]
 url = "http://localhost:4201"
 # types if specified can be...
-# types = ["pokemon", "pokemon_iv", "pokemon_no_iv", "gym", "invasion", "quest", "pokestop", "raid", "weather", "fort_update", "max_battle", "tappable", "raid_lobby", "max_battle_lobby"]
+# types = ["pokemon", "pokemon_iv", "pokemon_no_iv", "gym", "invasion", "quest", "pokestop", "raid", "weather", "fort_update", "max_battle", "tappable", "wayfarer_poi", "raid_lobby", "max_battle_lobby"]
 # "pokemon" includes both with ivs and without. "pokemon_iv" is pokemon whose three IVs are known, from an encounter
 # or derived from the encounter id (derive_iv). "pokemon_no_iv" is pokemon whose IVs are not known (yet).
 # See webhooks.md for every type's payload and firing conditions.

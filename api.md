@@ -16,6 +16,7 @@ Golbat provides both HTTP REST and gRPC APIs for querying Pokemon GO data.
 - [Station Endpoints](#station-endpoints)
 - [Quest Endpoints](#quest-endpoints)
 - [Tappable Endpoints](#tappable-endpoints)
+- [Wayfarer POI Endpoints](#wayfarer-poi-endpoints)
 - [Device Endpoints](#device-endpoints)
 - [Fort Tracker Endpoints](#fort-tracker-endpoints)
 - [Admin Endpoints](#admin-endpoints)
@@ -148,7 +149,8 @@ instead of probing gated endpoints.
 {
   "features": {
     "fort_in_memory": true,
-    "tappable_scan": true
+    "tappable_scan": true,
+    "wayfarer_poi": true
   },
   "limits": {
     "max_pokemon_results": 3000,
@@ -173,6 +175,7 @@ older Golbat that predates the key reports.
 |-----|---------|
 | `features.fort_in_memory` | The in-memory fort index is on (`fort_in_memory` config). Without it the [fort scans](#fort-scans) and [fort availability](#fort-availability) endpoints return 503, and pokestop by-id reads carry no `invasions`. |
 | `features.tappable_scan` | `/api/tappable/scan` and `/api/tappable/available` exist. Always true on builds that have the key. |
+| `features.wayfarer_poi` | Wayfarer POIs are stored and the [Wayfarer POI endpoints](#wayfarer-poi-endpoints) exist. Always true on builds that have the key. |
 | `limits.max_pokemon_results` | `tuning.max_pokemon_results`: the cap on pokemon scan/search results per request. |
 | `limits.max_fort_results` | `tuning.max_fort_results`: the cap on fort scan results per request (and per type group on `/api/fort/scan`). |
 | `limits.max_tappable_results` | `tuning.max_tappable_results`: the cap on tappable scan results per request. |
@@ -1242,6 +1245,66 @@ Unexpired tappables within a bounding box, filtered by DNF clauses. Not gated on
 
 ---
 
+## Wayfarer POI Endpoints
+
+Points of interest of the Niantic geodata service, including the ones that are
+not in the game. They are stored when a scanner forwards a
+`GET_POIS_IN_RADIUS` response (see `protos.md`); the game client does not make
+that request on its own, so the table is only as complete as the scanner makes
+it. Both endpoints read the database: a POI saved in the last moments may not
+be returned yet (write-behind).
+
+### GET /api/wayfarer-poi/id/:poi_id
+
+Retrieve a Wayfarer POI by ID.
+
+**Authentication:** Required
+
+**Parameters:**
+| Name | Type | Location | Description |
+|------|------|----------|-------------|
+| poi_id | string | path | POI ID |
+
+**Response:** [ApiWayfarerPoiResult](#apiwayfarerpoiresult)
+
+**Status Codes:**
+- 200: POI found
+- 404: POI not found
+
+### POST /api/wayfarer-poi/scan
+
+Wayfarer POIs within a bounding box, ordered by id. Not gated on `fort_in_memory`.
+
+**Authentication:** Required
+
+**Request:**
+```json
+{
+  "min": {"lat": 47.0, "lon": 8.0},
+  "max": {"lat": 47.5, "lon": 8.6},
+  "limit": 0,
+  "updated_after": 0,
+  "in_game": false
+}
+```
+
+- `limit`: 0 = server default; clamped by `tuning.max_fort_results`.
+- `updated_after`: only POIs with `updated` strictly newer than this unix time; 0 or omitted returns everything. Unlike the in-memory scans it is applied before the limit.
+- `in_game`: `true` for POIs that are in the game, `false` for the ones that are not; omitted or null returns both.
+
+**Response:**
+```json
+{"wayfarer_pois": [ApiWayfarerPoiResult], "limit_reached": false}
+```
+
+- `limit_reached`: more POIs matched than the effective limit.
+
+**Status Codes:**
+- 200: OK
+- 422: Request body fails validation
+
+---
+
 ## Device Endpoints
 
 ### GET /api/devices/all
@@ -1446,6 +1509,8 @@ methods themselves are always gated by `api_secret`.
 | `ScanStations(FortScanRequest) → StationScanResponse` | `POST /api/station/scan` |
 | `ScanForts(FortCombinedScanRequest) → FortScanResponse` | `POST /api/fort/scan` — each type group takes its own `limit` (0 = server default); the response carries `gyms_stats` / `pokestops_stats` / `stations_stats` (`examined`, `limit_reached`) per type, and the top-level `limit_reached` is true when any type or the overall `limit` was reached |
 | `ScanTappables(TappableScanRequest) → TappableScanResponse` | `POST /api/tappable/scan` — not gated on `fort_in_memory`; empty `filters` = every tappable; unknown `reward_type` or negative id → `INVALID_ARGUMENT`; `rewards` is `rewards_json` |
+| `ScanWayfarerPois(WayfarerPoiScanRequest) → WayfarerPoiScanResponse` | `POST /api/wayfarer-poi/scan` — read from the database; not gated on `fort_in_memory`; unset `in_game` = both |
+| `GetWayfarerPoi(GetWayfarerPoiRequest) → GetWayfarerPoiResponse` | `GET /api/wayfarer-poi/id/{poi_id}`, batched; misses are omitted; capped at `tuning.max_fort_results` ids per call (`INVALID_ARGUMENT` above it) |
 | `GetTappable(GetTappableRequest) → GetTappableResponse` | `GET /api/tappable/id/{tappable_id}`, batched; misses are omitted; capped at `tuning.max_tappable_results` ids per call (`INVALID_ARGUMENT` above it) |
 
 Every message mirrors the JSON request or response it is named after, field
@@ -1483,8 +1548,8 @@ the serialisation differs.
 - **Errors are gRPC status codes**: `UNAUTHENTICATED` (secret),
   `FAILED_PRECONDITION` (fort scans without `fort_in_memory`, HTTP 503),
   `INVALID_ARGUMENT` (`min` or `max` missing, more than
-  `max_pokemon_results` ids in `GetPokemon` or `max_tappable_results` ids
-  in `GetTappable`, or an unknown `reward_type` / negative id in a tappable
+  `max_pokemon_results` ids in `GetPokemon`, `max_tappable_results` ids
+  in `GetTappable` or `max_fort_results` ids in `GetWayfarerPoi`, or an unknown `reward_type` / negative id in a tappable
   scan).
 
 ### Example
@@ -1814,6 +1879,27 @@ shapes.
 
 - `id`: decimal string (encounter ids exceed 2^53).
 - `pokemon_id`: encounter species (encounter tappables); `reward_*`/`item_id`/`count` describe the first loot item; `rewards` holds all loot items as protojson.
+
+---
+
+### ApiWayfarerPoiResult
+
+```json
+{
+  "id": "0123456789abcdef0123456789abcdef.16",
+  "lat": 40.7128,
+  "lon": -74.0060,
+  "name": "Fountain",
+  "description": null,
+  "url": "https://lh3.googleusercontent.com/...",
+  "in_game": false,
+  "first_seen_timestamp": 1234567000,
+  "updated": 1234567800
+}
+```
+
+- `id`: the fort ID when `in_game` is true.
+- `updated`: moves when a field changes, and otherwise at most every 15 minutes while the POI keeps being returned.
 
 ---
 

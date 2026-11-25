@@ -369,6 +369,8 @@ func TestTier3RoutesRegisterInSpec(t *testing.T) {
 		{"get", "/api/tappable/id/{tappable_id}"},
 		{"post", "/api/tappable/scan"},
 		{"get", "/api/tappable/available"},
+		{"get", "/api/wayfarer-poi/id/{poi_id}"},
+		{"post", "/api/wayfarer-poi/scan"},
 		{"post", "/api/pokestop-positions"},
 	}
 	for _, w := range want {

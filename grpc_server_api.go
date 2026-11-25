@@ -122,6 +122,33 @@ func (s *grpcApiServer) GetTappable(ctx context.Context, in *pb.GetTappableReque
 	return &pb.GetTappableResponse{Tappables: decoder.GrpcGetTappables(in.GetIds())}, nil
 }
 
+// ScanWayfarerPois is POST /api/wayfarer-poi/scan. Not gated on fort_in_memory.
+func (s *grpcApiServer) ScanWayfarerPois(ctx context.Context, in *pb.WayfarerPoiScanRequest) (*pb.WayfarerPoiScanResponse, error) {
+	if err := requireBoundingBox(in.GetMin(), in.GetMax()); err != nil {
+		return nil, err
+	}
+	res, err := decoder.GrpcScanWayfarerPois(ctx, dbDetails, in)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "error scanning wayfarer pois")
+	}
+	return res, nil
+}
+
+// GetWayfarerPoi is the batched form of GET /api/wayfarer-poi/id/{poi_id}; ids
+// capped at tuning.max_fort_results.
+func (s *grpcApiServer) GetWayfarerPoi(ctx context.Context, in *pb.GetWayfarerPoiRequest) (*pb.GetWayfarerPoiResponse, error) {
+	if cap := config.Config.Tuning.MaxFortResults; cap > 0 {
+		if n := len(in.GetIds()); n > cap {
+			return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("too many ids: %d > %d", n, cap))
+		}
+	}
+	pois, err := decoder.GrpcGetWayfarerPois(ctx, dbDetails, in.GetIds())
+	if err != nil {
+		return nil, status.Error(codes.Internal, "error retrieving wayfarer pois")
+	}
+	return &pb.GetWayfarerPoiResponse{WayfarerPois: pois}, nil
+}
+
 // newGrpcServer builds the one gRPC server Golbat listens on: raw ingest,
 // the GolbatApi service, and server reflection (so grpcurl/ghz work without
 // the proto files). srvMetrics is nil when Prometheus is disabled. The

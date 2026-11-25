@@ -104,6 +104,7 @@ var pokemonCache *ottercache.OtterCache[uint64, *Pokemon]
 var incidentCache *ottercache.OtterCache[string, *Incident]
 var playerCache *ottercache.OtterCache[string, *Player]
 var routeCache *ottercache.OtterCache[string, *Route]
+var wayfarerPoiCache *ottercache.OtterCache[string, *WayfarerPoi]
 var getMapFortsCache *ottercache.OtterCache[FortId, *pogo.GetMapFortsOutProto_FortProto]
 
 var ProactiveIVSwitchSem chan bool
@@ -260,6 +261,12 @@ func initDataCache() {
 
 	routeCache = ottercache.NewOtterCache(ottercache.OtterCacheConfig[string, *Route]{
 		Name:       "route",
+		DefaultTTL: 60 * time.Minute,
+		TouchOnHit: true,
+	})
+
+	wayfarerPoiCache = ottercache.NewOtterCache(ottercache.OtterCacheConfig[string, *WayfarerPoi]{
+		Name:       "wayfarer_poi",
 		DefaultTTL: 60 * time.Minute,
 		TouchOnHit: true,
 	})

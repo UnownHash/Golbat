@@ -347,3 +347,12 @@ func TestTappableWebhookType(t *testing.T) {
 		t.Errorf("payload type = %q, want tappable", got)
 	}
 }
+
+func TestWayfarerPoiWebhookType(t *testing.T) {
+	if got := webhookConfigStringToType["wayfarer_poi"]; len(got) != 1 || got[0] != WayfarerPoi {
+		t.Errorf(`webhookConfigStringToType["wayfarer_poi"] = %v, want [WayfarerPoi]`, got)
+	}
+	if got := webhookTypeToPayloadType[WayfarerPoi]; got != "wayfarer_poi" {
+		t.Errorf("payload type = %q, want wayfarer_poi", got)
+	}
+}
