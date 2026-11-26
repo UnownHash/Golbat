@@ -25,7 +25,7 @@ const gymSelectColumns = `id, lat, lon, name, url, last_modified_timestamp, raid
 	raid_pokemon_move_2, raid_pokemon_form, raid_pokemon_alignment, raid_pokemon_cp, raid_is_exclusive,
 	cell_id, deleted, total_cp, first_seen_timestamp, raid_pokemon_gender, sponsor_id, partner_id,
 	raid_pokemon_costume, raid_pokemon_evolution, ar_scan_eligible, power_up_level, power_up_points,
-	power_up_end_timestamp, description, defenders, rsvps`
+	power_up_end_timestamp, description, defenders, rsvps, images`
 
 func loadGymFromDatabase(ctx context.Context, db db.DbDetails, fortId FortId, gym *Gym) error {
 	return timedDbQuery("loadGymFromDatabase", db.GeneralDb, func() error {
@@ -205,6 +205,7 @@ func createGymFortWebhooks(gym *Gym) {
 			Id:          gym.Id.String(),
 			Name:        gym.oldValues.Name.Ptr(),
 			ImageUrl:    gym.oldValues.Url.Ptr(),
+			Images:      jsonRaw(gym.oldValues.Images),
 			Description: gym.oldValues.Description.Ptr(),
 			Location:    Location{Latitude: gym.oldValues.Lat, Longitude: gym.oldValues.Lon},
 		}
@@ -368,8 +369,8 @@ func gymWriteDB(db db.DbDetails, gym *Gym, isNewRecord bool) error {
 	ctx := context.Background()
 
 	if isNewRecord {
-		res, err := db.GeneralDb.NamedExecContext(ctx, "INSERT INTO gym (id,lat,lon,name,url,last_modified_timestamp,raid_end_timestamp,raid_spawn_timestamp,raid_battle_timestamp,updated,raid_pokemon_id,guarding_pokemon_id,guarding_pokemon_display,available_slots,team_id,raid_level,enabled,ex_raid_eligible,in_battle,raid_pokemon_move_1,raid_pokemon_move_2,raid_pokemon_form,raid_pokemon_alignment,raid_pokemon_cp,raid_is_exclusive,cell_id,deleted,total_cp,first_seen_timestamp,raid_pokemon_gender,sponsor_id,partner_id,raid_pokemon_costume,raid_pokemon_evolution,ar_scan_eligible,power_up_level,power_up_points,power_up_end_timestamp,description, defenders, rsvps) "+
-			"VALUES (:id,:lat,:lon,:name,:url,UNIX_TIMESTAMP(),:raid_end_timestamp,:raid_spawn_timestamp,:raid_battle_timestamp,:updated,:raid_pokemon_id,:guarding_pokemon_id,:guarding_pokemon_display,:available_slots,:team_id,:raid_level,:enabled,:ex_raid_eligible,:in_battle,:raid_pokemon_move_1,:raid_pokemon_move_2,:raid_pokemon_form,:raid_pokemon_alignment,:raid_pokemon_cp,:raid_is_exclusive,:cell_id,0,:total_cp,UNIX_TIMESTAMP(),:raid_pokemon_gender,:sponsor_id,:partner_id,:raid_pokemon_costume,:raid_pokemon_evolution,:ar_scan_eligible,:power_up_level,:power_up_points,:power_up_end_timestamp,:description, :defenders, :rsvps)", gym)
+		res, err := db.GeneralDb.NamedExecContext(ctx, "INSERT INTO gym (id,lat,lon,name,url,last_modified_timestamp,raid_end_timestamp,raid_spawn_timestamp,raid_battle_timestamp,updated,raid_pokemon_id,guarding_pokemon_id,guarding_pokemon_display,available_slots,team_id,raid_level,enabled,ex_raid_eligible,in_battle,raid_pokemon_move_1,raid_pokemon_move_2,raid_pokemon_form,raid_pokemon_alignment,raid_pokemon_cp,raid_is_exclusive,cell_id,deleted,total_cp,first_seen_timestamp,raid_pokemon_gender,sponsor_id,partner_id,raid_pokemon_costume,raid_pokemon_evolution,ar_scan_eligible,power_up_level,power_up_points,power_up_end_timestamp,description, defenders, rsvps, images) "+
+			"VALUES (:id,:lat,:lon,:name,:url,UNIX_TIMESTAMP(),:raid_end_timestamp,:raid_spawn_timestamp,:raid_battle_timestamp,:updated,:raid_pokemon_id,:guarding_pokemon_id,:guarding_pokemon_display,:available_slots,:team_id,:raid_level,:enabled,:ex_raid_eligible,:in_battle,:raid_pokemon_move_1,:raid_pokemon_move_2,:raid_pokemon_form,:raid_pokemon_alignment,:raid_pokemon_cp,:raid_is_exclusive,:cell_id,0,:total_cp,UNIX_TIMESTAMP(),:raid_pokemon_gender,:sponsor_id,:partner_id,:raid_pokemon_costume,:raid_pokemon_evolution,:ar_scan_eligible,:power_up_level,:power_up_points,:power_up_end_timestamp,:description, :defenders, :rsvps, :images)", gym)
 
 		getStatsCollector().IncDbQuery("insert gym", err)
 		if err != nil {
@@ -417,7 +418,8 @@ func gymWriteDB(db db.DbDetails, gym *Gym, isNewRecord bool) error {
 			"power_up_end_timestamp = :power_up_end_timestamp,"+
 			"description = :description,"+
 			"defenders = :defenders,"+
-			"rsvps = :rsvps "+
+			"rsvps = :rsvps,"+
+			"images = :images "+
 			"WHERE id = :id", gym,
 		)
 		getStatsCollector().IncDbQuery("update gym", err)

@@ -2010,6 +2010,7 @@ type Gym struct {
 	Description                *string                `protobuf:"bytes,39,opt,name=description,proto3,oneof" json:"description,omitempty"`
 	DefendersJson              *string                `protobuf:"bytes,40,opt,name=defenders_json,json=defendersJson,proto3,oneof" json:"defenders_json,omitempty"`
 	RsvpsJson                  *string                `protobuf:"bytes,41,opt,name=rsvps_json,json=rsvpsJson,proto3,oneof" json:"rsvps_json,omitempty"`
+	ImagesJson                 *string                `protobuf:"bytes,42,opt,name=images_json,json=imagesJson,proto3,oneof" json:"images_json,omitempty"`
 	unknownFields              protoimpl.UnknownFields
 	sizeCache                  protoimpl.SizeCache
 }
@@ -2331,6 +2332,13 @@ func (x *Gym) GetRsvpsJson() string {
 	return ""
 }
 
+func (x *Gym) GetImagesJson() string {
+	if x != nil && x.ImagesJson != nil {
+		return *x.ImagesJson
+	}
+	return ""
+}
+
 // Mirrors decoder.ApiPokestopResult.
 type Pokestop struct {
 	state                          protoimpl.MessageState `protogen:"open.v1"`
@@ -2388,6 +2396,7 @@ type Pokestop struct {
 	ShowcaseExpiry                 *int64                 `protobuf:"varint,52,opt,name=showcase_expiry,json=showcaseExpiry,proto3,oneof" json:"showcase_expiry,omitempty"`
 	ShowcaseRankingsJson           *string                `protobuf:"bytes,53,opt,name=showcase_rankings_json,json=showcaseRankingsJson,proto3,oneof" json:"showcase_rankings_json,omitempty"`
 	Invasions                      []*Incident            `protobuf:"bytes,54,rep,name=invasions,proto3" json:"invasions,omitempty"`
+	ImagesJson                     *string                `protobuf:"bytes,55,opt,name=images_json,json=imagesJson,proto3,oneof" json:"images_json,omitempty"`
 	unknownFields                  protoimpl.UnknownFields
 	sizeCache                      protoimpl.SizeCache
 }
@@ -2798,6 +2807,13 @@ func (x *Pokestop) GetInvasions() []*Incident {
 		return x.Invasions
 	}
 	return nil
+}
+
+func (x *Pokestop) GetImagesJson() string {
+	if x != nil && x.ImagesJson != nil {
+		return *x.ImagesJson
+	}
+	return ""
 }
 
 // Mirrors decoder.ApiStationResult.
@@ -4140,7 +4156,7 @@ const file_grpc_api_proto_rawDesc = "" +
 	"\x16_battle_pokemon_move_1B\x18\n" +
 	"\x16_battle_pokemon_move_2B\x19\n" +
 	"\x17_battle_pokemon_staminaB\x1f\n" +
-	"\x1d_battle_pokemon_cp_multiplier\"\x8e\x13\n" +
+	"\x1d_battle_pokemon_cp_multiplier\"\xc4\x13\n" +
 	"\x03Gym\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x10\n" +
 	"\x03lat\x18\x02 \x01(\x01R\x03lat\x12\x10\n" +
@@ -4188,7 +4204,9 @@ const file_grpc_api_proto_rawDesc = "" +
 	"\vdescription\x18' \x01(\tH R\vdescription\x88\x01\x01\x12*\n" +
 	"\x0edefenders_json\x18( \x01(\tH!R\rdefendersJson\x88\x01\x01\x12\"\n" +
 	"\n" +
-	"rsvps_json\x18) \x01(\tH\"R\trsvpsJson\x88\x01\x01B\a\n" +
+	"rsvps_json\x18) \x01(\tH\"R\trsvpsJson\x88\x01\x01\x12$\n" +
+	"\vimages_json\x18* \x01(\tH#R\n" +
+	"imagesJson\x88\x01\x01B\a\n" +
 	"\x05_nameB\x06\n" +
 	"\x04_urlB\x1a\n" +
 	"\x18_last_modified_timestampB\x15\n" +
@@ -4227,7 +4245,8 @@ const file_grpc_api_proto_rawDesc = "" +
 	"\x17_power_up_end_timestampB\x0e\n" +
 	"\f_descriptionB\x11\n" +
 	"\x0f_defenders_jsonB\r\n" +
-	"\v_rsvps_json\"\xb6\x1d\n" +
+	"\v_rsvps_jsonB\x0e\n" +
+	"\f_images_json\"\xec\x1d\n" +
 	"\bPokestop\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x10\n" +
 	"\x03lat\x18\x02 \x01(\x01R\x03lat\x12\x10\n" +
@@ -4288,7 +4307,9 @@ const file_grpc_api_proto_rawDesc = "" +
 	"\x19showcase_ranking_standard\x183 \x01(\x03H+R\x17showcaseRankingStandard\x88\x01\x01\x12,\n" +
 	"\x0fshowcase_expiry\x184 \x01(\x03H,R\x0eshowcaseExpiry\x88\x01\x01\x129\n" +
 	"\x16showcase_rankings_json\x185 \x01(\tH-R\x14showcaseRankingsJson\x88\x01\x01\x122\n" +
-	"\tinvasions\x186 \x03(\v2\x14.golbat_api.IncidentR\tinvasionsB\a\n" +
+	"\tinvasions\x186 \x03(\v2\x14.golbat_api.IncidentR\tinvasions\x12$\n" +
+	"\vimages_json\x187 \x01(\tH.R\n" +
+	"imagesJson\x88\x01\x01B\a\n" +
 	"\x05_nameB\x06\n" +
 	"\x04_urlB\x18\n" +
 	"\x16_lure_expire_timestampB\x1a\n" +
@@ -4336,7 +4357,8 @@ const file_grpc_api_proto_rawDesc = "" +
 	"\x19_showcase_pokemon_type_idB\x1c\n" +
 	"\x1a_showcase_ranking_standardB\x12\n" +
 	"\x10_showcase_expiryB\x19\n" +
-	"\x17_showcase_rankings_json\"\xf1\f\n" +
+	"\x17_showcase_rankings_jsonB\x0e\n" +
+	"\f_images_json\"\xf1\f\n" +
 	"\aStation\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x10\n" +
 	"\x03lat\x18\x02 \x01(\x01R\x03lat\x12\x10\n" +

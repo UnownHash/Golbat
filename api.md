@@ -1472,7 +1472,7 @@ the serialisation differs.
 - **`DnfId.pokemon_id`** is the field name in both pokemon and fort filters
   (JSON pokemon filters use `id`).
 - **Stored JSON blobs** (`defenders_json`, `guarding_pokemon_display_json`,
-  `rsvps_json`, `quest_conditions_json`, `quest_rewards_json`,
+  `rsvps_json`, `images_json`, `quest_conditions_json`, `quest_rewards_json`,
   `alternative_quest_*_json`, `showcase_focus_json`, `showcase_rankings_json`,
   `stationed_pokemon_json`) are the stored JSON text verbatim, exactly as the
   HTTP API emits them. Unset means JSON `null`.
@@ -1642,6 +1642,7 @@ Scan requests also accept `{"latitude": .., "longitude": ..}`.
   "showcase_ranking_standard": 1,
   "showcase_expiry": 1234567890,
   "showcase_rankings": {"total_entries": 10, "last_update": 1234567800, "contest_entries": []},
+  "images": null,
   "invasions": [ApiPokestopIncident]
 }
 ```
@@ -1654,6 +1655,9 @@ Scan requests also accept `{"latitude": .., "longitude": ..}`.
   JSON emitted as native JSON, not strings; `null` when unset.
 - `showcase_focus` and `showcase_rankings` keep the most recent showcase after
   it ends; check `showcase_expiry` for liveness.
+- `images` is the player-submitted photo gallery with the votes on each image,
+  in the same shape as on [ApiGymResult](#apigymresult); `null` until a gallery
+  has been received, and when it is empty.
 - `invasions` ([ApiPokestopIncident](#apipokestopincident)) is omitted when
   there are none. It is attached on by-id reads and on scans with
   `with_incidents`, and only with `fort_in_memory` enabled.
@@ -1727,14 +1731,20 @@ lineup is known.
   "power_up_end_timestamp": 1234567890,
   "description": "Gym description",
   "defenders": [{"pokemon_id": 25, "gender": 1, "battles_won": 0, "battles_lost": 0, "times_fed": 0, "motivation_now": 1, "cp_now": 1200, "cp_when_deployed": 1200}],
-  "rsvps": null
+  "rsvps": null,
+  "images": [{"image_id": "abc", "image_url": "https://...", "creation_timestamp_ms": 1234567890000, "num_votes_from_game": 2, "num_votes_niantic_wide": 5}]
 }
 ```
 
-`guarding_pokemon_display`, `defenders` and `rsvps` are the stored JSON
-emitted as native JSON, not strings; `null` when unset or not valid JSON. The
-OpenAPI document describes the `guarding_pokemon_display` and `defenders`
+`guarding_pokemon_display`, `defenders`, `rsvps` and `images` are the stored
+JSON emitted as native JSON, not strings; `null` when unset or not valid JSON.
+The OpenAPI document describes the `guarding_pokemon_display` and `defenders`
 shapes.
+
+`images` is the fort's player-submitted photo gallery with the votes on each
+image, ordered by creation time; `has_player_voted` is left out because it
+describes the scanning account. It is `null` until a gallery has been received
+for the gym, and when the gallery is empty.
 
 ### ApiStationResult
 

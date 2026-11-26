@@ -178,6 +178,7 @@ func gymToProto(g *ApiGymResult) *pb.Gym {
 		Description:                g.Description,
 		DefendersJson:              jsonBytesToProto(g.Defenders),
 		RsvpsJson:                  rawJsonToProto(g.Rsvps),
+		ImagesJson:                 rawJsonToProto(g.Images),
 	}
 }
 
@@ -260,6 +261,7 @@ func pokestopToProto(p *ApiPokestopResult) *pb.Pokestop {
 		ShowcaseRankingStandard:        p.ShowcaseRankingStandard,
 		ShowcaseExpiry:                 p.ShowcaseExpiry,
 		ShowcaseRankingsJson:           rawJsonToProto(p.ShowcaseRankings),
+		ImagesJson:                     rawJsonToProto(p.Images),
 		Invasions:                      incidentsToProto(p.Invasions),
 	}
 }

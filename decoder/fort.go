@@ -1,7 +1,9 @@
 package decoder
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"strings"
@@ -22,13 +24,23 @@ type Location struct {
 }
 
 type FortWebhook struct {
-	Id          string   `json:"id"`
-	Type        string   `json:"type"`
-	Name        *string  `json:"name"`
-	Description *string  `json:"description"`
-	ImageUrl    *string  `json:"image_url"`
-	Location    Location `json:"location"`
-	CellId      uint64   `json:"-"` // internal use only, not sent in webhook
+	Id          string           `json:"id"`
+	Type        string           `json:"type"`
+	Name        *string          `json:"name"`
+	Description *string          `json:"description"`
+	ImageUrl    *string          `json:"image_url"`
+	Images      *json.RawMessage `json:"images"` // photo gallery with votes, see fortImagesJson
+	Location    Location         `json:"location"`
+	CellId      uint64           `json:"-"` // internal use only, not sent in webhook
+}
+
+// fortImagesChanged reports whether the gallery differs: an image added or
+// removed, or a vote count that moved.
+func fortImagesChanged(old, new *json.RawMessage) bool {
+	if old == nil || new == nil {
+		return old != new
+	}
+	return !bytes.Equal(*old, *new)
 }
 
 type FortChangeWebhook struct {
@@ -84,6 +96,7 @@ func InitWebHookFortFromGym(gym *Gym) *FortWebhook {
 	fort.Id = gym.Id.String()
 	fort.Name = gym.Name.Ptr()
 	fort.ImageUrl = gym.Url.Ptr()
+	fort.Images = jsonRaw(gym.Images)
 	fort.Description = gym.Description.Ptr()
 	fort.Location = Location{Latitude: gym.Lat, Longitude: gym.Lon}
 	fort.CellId = uint64(gym.CellId.ValueOrZero())
@@ -99,6 +112,7 @@ func InitWebHookFortFromPokestop(stop *Pokestop) *FortWebhook {
 	fort.Id = stop.Id.String()
 	fort.Name = stop.Name.Ptr()
 	fort.ImageUrl = stop.Url.Ptr()
+	fort.Images = jsonRaw(stop.Images)
 	fort.Description = stop.Description.Ptr()
 	fort.Location = Location{Latitude: stop.Lat, Longitude: stop.Lon}
 	fort.CellId = uint64(stop.CellId.ValueOrZero())
@@ -163,6 +177,10 @@ func CreateFortWebHooks(old *FortWebhook, new *FortWebhook, change FortChange) {
 			}
 		} else if (old.ImageUrl == nil || *old.ImageUrl == "") && new.ImageUrl != nil && *new.ImageUrl != "" {
 			editTypes = append(editTypes, "image_url")
+		}
+		// Check if the photo gallery or its votes have changed
+		if fortImagesChanged(old.Images, new.Images) {
+			editTypes = append(editTypes, "images")
 		}
 		// Check if location has changed
 		if !floatAlmostEqual(old.Location.Latitude, new.Location.Latitude, floatTolerance) ||

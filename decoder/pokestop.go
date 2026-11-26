@@ -64,6 +64,7 @@ type PokestopData struct {
 	ShowcaseRankingStandard       null.Int    `db:"showcase_ranking_standard"`
 	ShowcaseExpiry                null.Int    `db:"showcase_expiry"`
 	ShowcaseRankings              null.String `db:"showcase_rankings"`
+	Images                        null.String `db:"images"`
 }
 
 // Pokestop struct.
@@ -110,6 +111,7 @@ type PokestopOldValues struct {
 	Name                 null.String
 	Url                  null.String
 	Description          null.String
+	Images               null.String
 	Lat                  float64
 	Lon                  float64
 
@@ -155,6 +157,7 @@ func (p *Pokestop) snapshotOldValues() {
 		Name:                 p.Name,
 		Url:                  p.Url,
 		Description:          p.Description,
+		Images:               p.Images,
 		Lat:                  p.Lat,
 		Lon:                  p.Lon,
 		// Carry forward running webhook state (see PokestopOldValues).
@@ -710,6 +713,17 @@ func (p *Pokestop) SetShowcaseRankings(v null.String) {
 			p.debug.recordChange(fmt.Sprintf("ShowcaseRankings:%s->%s", FormatNull(p.ShowcaseRankings), FormatNull(v)))
 		}
 		p.ShowcaseRankings = v
+		p.dirty = true
+	}
+}
+
+// SetImages sets the player-submitted photo gallery JSON (see fortImagesJson)
+func (p *Pokestop) SetImages(v null.String) {
+	if p.Images != v {
+		if dbDebugEnabled {
+			p.debug.recordChange(fmt.Sprintf("Images:%s->%s", FormatNull(p.Images), FormatNull(v)))
+		}
+		p.Images = v
 		p.dirty = true
 	}
 }

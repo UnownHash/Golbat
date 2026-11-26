@@ -36,6 +36,13 @@ func decode(ctx context.Context, method int, protoData *ProtoData) {
 			}
 			return val
 		}
+		// Titan player-submission actions travel as their own method ids, outside Method
+		if val, ok := pogo.TitanPlayerSubmissionAction_name[int32(method)]; ok {
+			if trimString {
+				return strings.TrimPrefix(val, "TITAN_PLAYER_SUBMISSION_ACTION_")
+			}
+			return val
+		}
 		return fmt.Sprintf("#%d", method)
 	}
 
@@ -131,6 +138,10 @@ func decode(ctx context.Context, method int, protoData *ProtoData) {
 		if getScanParameters(protoData).ProcessGyms {
 			result = decodeGetEventRsvpCount(ctx, protoData.Data)
 		}
+		processed = true
+	case pogo.Method(pogo.TitanPlayerSubmissionAction_TITAN_PLAYER_SUBMISSION_ACTION_GET_IMAGES_FOR_POI):
+		// Request helps (it names the fort when the gallery is empty), but can be decoded without it
+		result = decodeGetImagesForPoi(ctx, protoData.Request, protoData.Data)
 		processed = true
 	default:
 		log.Debugf("Did not know hook type %s", pogo.Method(method))
@@ -845,6 +856,28 @@ func decodeGetEventRsvp(ctx context.Context, request []byte, data []byte) string
 	}
 
 	return "Failed to parse GetEventRsvpsProto - unknown event type"
+}
+
+func decodeGetImagesForPoi(ctx context.Context, request []byte, data []byte) string {
+	var images pogo.TitanGetImagesForPoiOutProto
+	if err := unmarshalClientProto(data, &images); err != nil {
+		log.Errorf("Failed to parse %s", err)
+		return fmt.Sprintf("Failed to parse TitanGetImagesForPoiOutProto %s", err)
+	}
+
+	var imagesRequest pogo.TitanGetImagesForPoiProto
+	if request != nil {
+		if err := unmarshalClientProto(request, &imagesRequest); err != nil {
+			log.Errorf("Failed to parse %s", err)
+			return fmt.Sprintf("Failed to parse TitanGetImagesForPoiProto %s", err)
+		}
+	}
+
+	if images.Status != pogo.TitanGetImagesForPoiOutProto_SUCCESS {
+		return fmt.Sprintf("Ignored TitanGetImagesForPoiOutProto non-success status %s", images.Status)
+	}
+
+	return decoder.UpdateFortRecordWithImagesProto(ctx, dbDetails, imagesRequest.GetPoiId(), &images)
 }
 
 func decodeGetEventRsvpCount(ctx context.Context, data []byte) string {

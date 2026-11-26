@@ -300,7 +300,7 @@ INSERT INTO pokestop (
 	cell_id, lure_id, deleted, sponsor_id, partner_id, ar_scan_eligible,
 	power_up_points, power_up_level, power_up_end_timestamp, updated, first_seen_timestamp,
 	description, showcase_focus, showcase_pokemon_id, showcase_pokemon_form_id,
-	showcase_pokemon_type_id, showcase_ranking_standard, showcase_expiry, showcase_rankings
+	showcase_pokemon_type_id, showcase_ranking_standard, showcase_expiry, showcase_rankings, images
 )
 VALUES (
 	:id, :lat, :lon, :name, :url, :enabled, :lure_expire_timestamp, :last_modified_timestamp,
@@ -315,7 +315,7 @@ VALUES (
 	:cell_id, :lure_id, :deleted, :sponsor_id, :partner_id, :ar_scan_eligible,
 	:power_up_points, :power_up_level, :power_up_end_timestamp, :updated, UNIX_TIMESTAMP(),
 	:description, :showcase_focus, :showcase_pokemon_id, :showcase_pokemon_form_id,
-	:showcase_pokemon_type_id, :showcase_ranking_standard, :showcase_expiry, :showcase_rankings
+	:showcase_pokemon_type_id, :showcase_ranking_standard, :showcase_expiry, :showcase_rankings, :images
 )
 ON DUPLICATE KEY UPDATE
 	lat = VALUES(lat),
@@ -368,7 +368,8 @@ ON DUPLICATE KEY UPDATE
 	showcase_pokemon_type_id = VALUES(showcase_pokemon_type_id),
 	showcase_ranking_standard = VALUES(showcase_ranking_standard),
 	showcase_expiry = VALUES(showcase_expiry),
-	showcase_rankings = VALUES(showcase_rankings)
+	showcase_rankings = VALUES(showcase_rankings),
+	images = VALUES(images)
 `
 
 const gymBatchUpsertQuery = `
@@ -381,7 +382,7 @@ INSERT INTO gym (
 	raid_is_exclusive, cell_id, deleted, total_cp, first_seen_timestamp,
 	raid_pokemon_gender, sponsor_id, partner_id, raid_pokemon_costume,
 	raid_pokemon_evolution, ar_scan_eligible, power_up_level, power_up_points,
-	power_up_end_timestamp, description, rsvps, defenders
+	power_up_end_timestamp, description, rsvps, defenders, images
 )
 VALUES (
 	:id, :lat, :lon, :name, :url, :last_modified_timestamp, :raid_end_timestamp,
@@ -392,7 +393,7 @@ VALUES (
 	:raid_is_exclusive, :cell_id, :deleted, :total_cp, UNIX_TIMESTAMP(),
 	:raid_pokemon_gender, :sponsor_id, :partner_id, :raid_pokemon_costume,
 	:raid_pokemon_evolution, :ar_scan_eligible, :power_up_level, :power_up_points,
-	:power_up_end_timestamp, :description, :rsvps, :defenders
+	:power_up_end_timestamp, :description, :rsvps, :defenders, :images
 )
 ON DUPLICATE KEY UPDATE
 	lat = VALUES(lat),
@@ -433,7 +434,8 @@ ON DUPLICATE KEY UPDATE
 	power_up_end_timestamp = VALUES(power_up_end_timestamp),
 	description = VALUES(description),
 	rsvps = VALUES(rsvps),
-	defenders = VALUES(defenders)
+	defenders = VALUES(defenders),
+	images = VALUES(images)
 `
 
 // seen_type is COALESCEd rather than assigned (as pvp already was): a NULL
